@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>share-kit render-dom demo</title>
+  <style>
+    body { font-family: -apple-system, 'PingFang SC', sans-serif; margin: 24px; background: #f5f6f8; }
+    h1 { font-size: 18px; }
+    #poster-host { width: 750px; overflow-x: auto; }
+    #result { max-width: 375px; border: 1px solid #ddd; border-radius: 8px; display: none; }
+    #status { color: #666; font-size: 13px; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <h1>share-kit render-dom demo（750×600 card / outdoor 主题）</h1>
+  <div id="status">正在生成海报…</div>
+  <!-- 海报宿主：posterHtml 注入，capture 抓取 -->
+  <div id="poster-host"></div>
+  <!-- 导出产物展示 -->
+  <img id="result" alt="海报导出结果" />
+
+  <script type="module">
+    // poster 入口零依赖纯 ESM，直接引源码；render-dom 带 CJS 依赖（qrcode），走打包产物
+    import { resolveSpec } from '../src/poster/index.mjs'
+    import { qrDataUrl, posterHtml, capture, exportPng } from './render-dom.bundle.mjs'
+
+    // 样例业务输入（模拟业务站数据）
+    const input = {
+      format: 'card',
+      themeId: 'outdoor',
+      content: {
+        headline: '周末爬山局',
+        subline: '新增 3 个地点，全员成行',
+        facts: [
+          { label: '时间', value: '周六 09:00' },
+          { label: '集合点', value: '北高峰南门' },
+          { label: '强度', value: '初级 · 4 小时' },
+        ],
+        owner: '阿强',
+        cta: '长按识别二维码 · 报名',
+      },
+      qr: { url: 'https://share.hxym18.com/s/demo001' },
+    }
+
+    const status = document.getElementById('status')
+
+    async function render() {
+      // 1. 业务数据 → 冻结快照
+      const spec = resolveSpec(input)
+      // 2. 二维码 512px 高倍源图
+      const qrSrc = await qrDataUrl(spec.qr)
+      // 3. 快照 → 海报 HTML → 注入宿主
+      const html = posterHtml(spec, { qrDataUrl: qrSrc })
+      const host = document.getElementById('poster-host')
+      host.innerHTML = html
+      // 4. DOM → canvas（scale 预算 + 两档降级）
+      const canvas = await capture(host.firstElementChild)
+      if (!canvas) throw new Error('海报画布两档预算均失败')
+      // 5. 导出（blob URL 优先）
+      const exported = await exportPng(canvas)
+      const img = document.getElementById('result')
+      img.src = exported.url
+      img.style.display = 'block'
+      status.textContent = `完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}）`
+      // 供 Playwright 验收断言
+      window.__poster = { canvas, spec, exported }
+    }
+
+    render().catch((err) => {
+      status.textContent = `失败：${err && err.message ? err.message : err}`
+      window.__posterError = String(err)
+    })
+  </script>
+</body>
+</html>
