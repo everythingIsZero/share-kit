@@ -19,6 +19,13 @@
     .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
     /* 分享按钮 / Action Sheet / 长按引导层的样式均由 SDK 注入（share-kit-ui-style） */
     #share-slot { margin-top: 10px; }
+    /* ④ 各环境行为预览矩阵：当前环境行高亮 */
+    .env-row { border: 1px solid #e5e7eb; border-left: 3px solid #d1d5db; border-radius: 8px; padding: 8px 12px; margin: 6px 0; background: #fff; font-size: 13px; line-height: 1.7; }
+    .env-row.current { border-left-color: #07c160; background: #f2fbf6; }
+    .env-row .env-name { font-weight: 600; }
+    .env-row .env-here { font-size: 11px; color: #07c160; border: 1px solid rgba(7,193,96,.4); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+    .env-row .env-behavior { color: #222; }
+    .env-row .env-how { color: #777; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -43,10 +50,16 @@
   <h2>③ 分享 / 保存（点击弹出可用方式 · 主推荐高亮）</h2>
   <div id="share-slot"></div>
 
+  <!-- ④ 各环境行为预览：listActions 纯函数喂模拟指纹，与真实点击共用决策单源 -->
+  <h2>④ 各环境点「分享海报」会发生什么（同一份 SDK，不同终端）</h2>
+  <div id="env-matrix"></div>
+
   <script type="module">
     // poster / core / web / ui 四入口零依赖纯 ESM，直接引源码；render-dom 带 CJS 依赖（qrcode），走打包产物
     import { resolveSpec } from '../src/poster/index.mjs'
     import { normalizeFingerprint, decideAction, listActions } from '../src/core/index.mjs'
+    import { envKeyFor } from '../src/core/capability-table.mjs'
+    import { sheetItemsOf } from '../src/ui/view.mjs'
     import { collectSignals } from '../src/web/index.mjs'
     import { mountShare } from '../src/ui/index.mjs'
     import { qrDataUrl, posterHtml, capture, exportPng } from './render-dom.bundle.mjs'
@@ -94,6 +107,69 @@
 
     // 供自动化验收读取（Playwright 多 UA 场景断言环境识别与决策）
     window.__verifyEnv = { fingerprint, signals, plan, firstList }
+
+    // ── 各环境行为预览（④ 矩阵） ─────────────────────────────────────────
+    // listActions 是纯函数：喂入模拟指纹即可预览任意环境点击后的行为，
+    // 与真实点击共用同一决策单源——这里不维护第二份「环境对照表」。
+    // signals 取「点击瞬间」的典型值（hasTransientActivation: true），
+    // 因为系统分享只有在那一刻才过得了信号闸（见 README 接入说明）。
+    const ENV_PREVIEW = [
+      {
+        keys: ['wechat:ios', 'wechat:android'], label: '微信内打开（手机）',
+        signals: { canShareFiles: false, hasTransientActivation: true, hasDownloadAttr: false },
+        how: '长按弹出的海报图 → 菜单选「保存图片」或「发送给朋友」（图片消息）',
+      },
+      {
+        keys: ['wechat-desktop:macos', 'wechat-desktop:windows'], label: '微信内打开（PC）',
+        signals: { canShareFiles: false, hasTransientActivation: true, hasDownloadAttr: true },
+        how: '下载海报 PNG 到本机，再发给客户',
+      },
+      {
+        keys: ['browser:ios'], label: '手机浏览器（iOS Safari / Chrome）',
+        signals: { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: false },
+        how: '系统分享面板里选微信 → 以图片发送给朋友',
+      },
+      {
+        keys: ['browser:android'], label: '手机浏览器（Android）',
+        signals: { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true },
+        how: '系统分享面板里选微信 → 以图片发送给朋友',
+      },
+      {
+        keys: ['browser:macos', 'browser:windows'], label: '电脑浏览器',
+        signals: { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true },
+        how: '系统分享或下载 PNG',
+      },
+      {
+        keys: ['wechat-miniprogram-webview:ios', 'wechat-miniprogram-webview:android'], label: '小程序 web-view',
+        signals: { canShareFiles: false, hasTransientActivation: true, hasDownloadAttr: true },
+        how: '复制链接到微信对话打开；转发由宿主小程序自己的分享菜单负责',
+      },
+    ]
+
+    const currentEnvKey = envKeyFor(fingerprint)
+    const matrix = document.getElementById('env-matrix')
+    matrix.innerHTML = ENV_PREVIEW.map((env) => {
+      const [container, os] = env.keys[0].split(':')
+      const fp = { container, os, engine: 'unknown', versionBand: 'unknown' }
+      const list = listActions({ fingerprint: fp, artifactKind: 'image', signals: env.signals })
+      const items = sheetItemsOf(list, 'image', null)
+      // 三种交互形态，与 mountShare 点击行为一一对应：长按直出 / 唯一动作直出 / 弹列表
+      let behavior
+      if (list.actions[0].id === 'preview.longpress') {
+        behavior = '点按钮直接弹大图（长按可保存 / 发送给朋友，层内另有「复制链接」）'
+      } else if (items.length === 1) {
+        behavior = `点按钮不弹列表，直接执行「${items[0].label}」`
+      } else {
+        behavior = `点按钮弹方式列表：${items.map((it) => (it.isPrimary ? `${it.label}（推荐）` : it.label)).join(' / ')}`
+      }
+      const here = env.keys.includes(currentEnvKey)
+      return `<div class="env-row${here ? ' current' : ''}">
+        <div class="env-name">${env.label}${here ? '<span class="env-here">你在这里</span>' : ''}</div>
+        <div class="env-behavior">${behavior}</div>
+        <div class="env-how">保存 / 转发怎么完成：${env.how}</div>
+      </div>`
+    }).join('')
+    window.__envMatrix = ENV_PREVIEW.map((env) => env.keys.includes(currentEnvKey) ? env.keys[0] : null).filter(Boolean)
 
     // ── 分享产物（可变引用：mountShare 执行时取值，渲染完成后补 files / imageUrl） ──
     const artifact = {

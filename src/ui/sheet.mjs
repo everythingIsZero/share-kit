@@ -146,7 +146,8 @@ export function showLongpressOverlay({ imageUrl, secondary }) {
       img.alt = '长按保存这张图片'
       const tip = document.createElement('div')
       tip.className = 'share-kit-longpress-tip'
-      tip.textContent = '长按上方图片，选择保存'
+      // 微信内长按图片的菜单同时有「保存图片」与「发送给朋友」——转发这条路必须说出来
+      tip.textContent = '长按图片，可保存或发送给朋友'
       // 次要方式按钮（如复制链接）：点击即执行，引导层不关（用户可能还想长按）
       if (secondary && typeof secondary.onSelect === 'function') {
         const alt = document.createElement('button')
