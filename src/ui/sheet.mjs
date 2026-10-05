@@ -28,6 +28,7 @@ const CSS = `
 .share-kit-longpress.share-kit-open { opacity: 1; }
 .share-kit-longpress img { max-width: 92vw; max-height: 68vh; }
 .share-kit-longpress-tip { color: #ffd970; font-size: 15px; }
+.share-kit-longpress-actions { display: flex; gap: 12px; justify-content: center; }
 .share-kit-longpress-secondary { padding: 8px 22px; border: 1px solid rgba(255,255,255,.35); border-radius: 20px; background: none; color: #fff; font-size: 13px; cursor: pointer; }
 .share-kit-longpress-close { padding: 8px 22px; border: 1px solid #777; border-radius: 20px; background: none; color: #ccc; font-size: 13px; cursor: pointer; }
 .share-kit-tip { position: fixed; top: 0; left: 50%; transform: translate(-50%, -110%); z-index: 9992; margin-top: max(12px, env(safe-area-inset-top, 0px)); padding: 10px 16px; max-width: 86vw; border-radius: 10px; background: rgba(17,17,17,.92); color: #fff; font-size: 14px; line-height: 1.5; transition: transform .28s ease; }
@@ -148,23 +149,27 @@ export function showLongpressOverlay({ imageUrl, secondary }) {
       tip.className = 'share-kit-longpress-tip'
       // 微信内长按图片的菜单同时有「保存图片」与「发送给朋友」——转发这条路必须说出来
       tip.textContent = '长按图片，可保存或发送给朋友'
-      // 次要方式按钮（如复制链接）：点击即执行，引导层不关（用户可能还想长按）
+
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'share-kit-longpress-close'
+      btn.textContent = '关闭'
+      btn.addEventListener('click', close)
+
+      // 次要方式（如复制链接）与关闭并排一行——上下堆叠浪费纵向空间，大图能占更高
       if (secondary && typeof secondary.onSelect === 'function') {
         const alt = document.createElement('button')
         alt.type = 'button'
         alt.className = 'share-kit-longpress-secondary'
         alt.textContent = secondary.label || '复制链接'
         alt.addEventListener('click', () => secondary.onSelect())
-        panel.append(img, tip, alt)
+        const actions = document.createElement('div')
+        actions.className = 'share-kit-longpress-actions'
+        actions.append(alt, btn)
+        panel.append(img, tip, actions)
       } else {
-        panel.append(img, tip)
+        panel.append(img, tip, btn)
       }
-      const btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'share-kit-longpress-close'
-      btn.textContent = '关闭'
-      btn.addEventListener('click', close)
-      panel.appendChild(btn)
       return panel
     },
   }).close
