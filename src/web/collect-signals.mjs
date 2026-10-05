@@ -21,6 +21,8 @@ function nav(win) {
  * 探测「能不能分享文件」。
  * `canShare` 只校验数据结构、不校验目标应用，因此它只是倾向而非保证；拿不到 File 构造器时
  * 一律记 false（宁可少给一个动作，也不给一个点了没反应的按钮）。
+ * 注意语义边界：本信号只回答「带不带得动文件」——「有没有 navigator.share」归 hasShare。
+ * 桌面 Chrome 两者会分裂（share({url}) 可用、canShare({files})===false），决策侧须按产物分闸。
  */
 function detectCanShareFiles(win) {
   try {
@@ -28,6 +30,16 @@ function detectCanShareFiles(win) {
     if (!n || !isFn(n.canShare) || !isFn(win.File)) return false
     const probe = new win.File([new win.Uint8Array(1)], 'probe.png', { type: 'image/png' })
     return n.canShare({ files: [probe] }) === true
+  } catch {
+    return false
+  }
+}
+
+/** 探测「有没有 navigator.share」（link 产物的 share.system 只依赖存在性，不带文件） */
+function detectHasShare(win) {
+  try {
+    const n = nav(win)
+    return Boolean(n && isFn(n.share))
   } catch {
     return false
   }
@@ -77,6 +89,7 @@ export function collectSignals(win = typeof globalThis === 'undefined' ? {} : gl
     ua: n && typeof n.userAgent === 'string' ? n.userAgent : '',
     maxTouchPoints: touch,
     isSecureContext: Boolean(win && win.isSecureContext === true),
+    hasShare: detectHasShare(win),
     canShareFiles: detectCanShareFiles(win),
     hasStandaloneDisplayMode: detectStandalone(win),
     hasDownloadAttr: detectDownloadAttr(win),

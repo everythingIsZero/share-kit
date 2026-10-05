@@ -107,6 +107,28 @@ test('非微信浏览器且可分享文件：primary=share.system', () => {
   assert.equal(allDenied.reason, REASON_CODES.signalGated)
 })
 
+test('信号闸按产物区分：canShareFiles=false 只闸带文件的产物，link 的 share.system 不被过杀', () => {
+  // 桌面 Chrome 现场：navigator.share 存在（Level 1：url/text/title），
+  // canShare({files})===false（桌面不支持文件分享）——两信号分裂
+  const base = {
+    fingerprint: fp('browser', 'macos', 'blink'),
+    signals: { hasShare: true, canShareFiles: false, hasTransientActivation: true, hasDownloadAttr: true },
+  }
+  // link 不带文件：share({url}) 本可用，必须入列（此前被无差别闸掉，与能力表矛盾）
+  const link = listActions({ ...base, artifactKind: 'link' })
+  assert.deepEqual(link.actions.map((a) => a.id), ['share.system', 'copy.link'])
+  // image / video 要带文件：canShareFiles 如实闸掉，落下一顺位
+  for (const kind of ['image', 'video']) {
+    const r = listActions({ ...base, artifactKind: kind })
+    assert.equal(r.actions.some((a) => a.id === 'share.system'), false, `${kind} 不该有 share.system`)
+    assert.equal(r.actions[0].id, 'save.album')
+  }
+  // navigator.share 不存在（Firefox / Safari 桌面）：link 也无路可走，不得列必失败项
+  const noShare = listActions({ ...base, artifactKind: 'link', signals: { ...base.signals, hasShare: false } })
+  assert.deepEqual(noShare.actions.map((a) => a.id), ['copy.link'])
+  assert.equal(noShare.reason, REASON_CODES.signalGated)
+})
+
 test('iOS 装到桌面的 PWA 且产物是图片：唯一动作 share.system，提示按本环境给', () => {
   const plan = decideAction({ fingerprint: fp('pwa-standalone', 'ios', 'wkwebview'), artifactKind: 'image' })
   assert.equal(plan.primary, 'share.system')

@@ -112,12 +112,19 @@ export const ARTIFACT_ACTION_GATES = Object.freeze({
   'share.card.miniapp': Object.freeze(['link', 'image']),
 })
 
-/** 运行时信号闸：信号明确否决时，该动作在这一刻不可用 */
-function signalsAllow(actionId, signals) {
+/**
+ * 运行时信号闸：信号明确否决时，该动作在这一刻不可用。share.system 的否决按产物区分：
+ * - `hasShare === false`（宿主无系统分享接口，如 Firefox / Safari 桌面）→ 所有产物都闸（执行必失败）；
+ * - `canShareFiles === false` 只闸**要带文件**的产物（image / video）——link 不带文件，
+ *   桌面 Chrome 文件分享探否但链接分享本可用，不得过杀
+ *   （2026-10-05 修复：此前无差别闸掉了 link 的系统分享，与能力表 browser 桌面行矛盾）。
+ */
+function signalsAllow(actionId, signals, artifactKind) {
   const s = signals && typeof signals === 'object' ? signals : {}
   if (actionId === 'share.system') {
-    if (s.canShareFiles === false) return false
     if (s.hasTransientActivation === false) return false
+    if (s.hasShare === false) return false
+    if (s.canShareFiles === false && artifactKind !== 'link') return false
   }
   if (actionId === 'save.album' && s.hasDownloadAttr === false) return false
   return true
@@ -195,7 +202,7 @@ function availableActions(artifactKind, row, signals) {
       gatedByArtifact = true
       continue
     }
-    if (!signalsAllow(actionId, signals)) {
+    if (!signalsAllow(actionId, signals, artifactKind)) {
       gatedBySignal = true
       continue
     }
@@ -209,7 +216,7 @@ function availableActions(artifactKind, row, signals) {
   if (out.every((id) => UNCONDITIONAL_ACTIONS.includes(id))) {
     const fb = SIGNAL_FALLBACK[artifactKind]
     const docDenied = fb && row[fb] && row[fb].available === false
-    if (fb && !docDenied && signals && typeof signals === 'object' && signalsAllow(fb, signals)) {
+    if (fb && !docDenied && signals && typeof signals === 'object' && signalsAllow(fb, signals, artifactKind)) {
       out.unshift(fb)
       signalFallbackUsed = true
     }

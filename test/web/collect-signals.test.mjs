@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 
 import { collectSignals } from '../../src/web/collect-signals.mjs'
 
-test('信号采集只读不写：返回七项信号，且假 window 未被新增或改写属性', () => {
+test('信号采集只读不写：返回八项信号，且假 window 未被新增或改写属性', () => {
   const fake = {
     navigator: { userAgent: 'x', canShare: () => true, share: () => {} },
     matchMedia: () => ({ matches: true }),
@@ -24,6 +24,7 @@ test('信号采集只读不写：返回七项信号，且假 window 未被新增
     'ua',
     'maxTouchPoints',
     'isSecureContext',
+    'hasShare',
     'canShareFiles',
     'hasStandaloneDisplayMode',
     'hasDownloadAttr',
@@ -33,6 +34,7 @@ test('信号采集只读不写：返回七项信号，且假 window 未被新增
   }
   assert.equal(signals.ua, 'x')
   assert.equal(signals.hasStandaloneDisplayMode, true) // matchMedia 命中 standalone
+  assert.equal(signals.hasShare, true) // navigator.share 存在
 
   // 宿主对象未被新增或改写
   assert.deepEqual(Object.keys(fake), keysBefore)
@@ -66,6 +68,7 @@ test('缺字段不炸：空对象输入时所有字段是可判定的空值', ()
   assert.equal(signals.ua, '')
   assert.equal(signals.maxTouchPoints, undefined)
   assert.equal(signals.isSecureContext, false)
+  assert.equal(signals.hasShare, false)
   assert.equal(signals.canShareFiles, false)
   assert.equal(signals.hasStandaloneDisplayMode, false)
   assert.equal(signals.hasDownloadAttr, false)

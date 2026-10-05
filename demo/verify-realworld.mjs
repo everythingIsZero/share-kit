@@ -231,6 +231,34 @@ const SCENARIOS = [
       check('[Mac Chrome] 二维码可识读（jsQR）', decoded === 'https://share.hxym18.com/s/demo001', decoded)
     },
   },
+  {
+    name: 'Mac Chrome link 产物',
+    ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    viewport: { width: 1280, height: 900 },
+    expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.album', reason: 'primary-available', hint: 'null', firstList: 'save.album,copy.link' },
+    init: () => {
+      // 模拟真实桌面 Chrome 的分享能力分裂：share 接口存在（Level 1：url/text），
+      // canShare({files}) 返回 false（桌面不支持文件分享）——link 过杀修复（2026-10-05）的现场
+      navigator.share = () => Promise.resolve()
+      navigator.canShare = (d) => !(d && d.files && d.files.length)
+    },
+    async interact(page) {
+      // 决策层 bug 用决策层验证：页面上下文里直接调 core/web 模块，断言三产物口径
+      const r = await page.evaluate(async () => {
+        const web = await import('/src/web/index.mjs')
+        const core = await import('/src/core/index.mjs')
+        const s = web.collectSignals()
+        const { fingerprint } = core.normalizeFingerprint(s)
+        // 点击瞬间语义：一次性用户激活为 true（完整列表只在点击瞬间可信）
+        const signals = { ...s, hasTransientActivation: true }
+        const of = (kind) => core.listActions({ fingerprint, artifactKind: kind, signals }).actions.map((a) => a.id)
+        return { hasShare: s.hasShare, canShareFiles: s.canShareFiles, link: of('link'), image: of('image'), video: of('video') }
+      })
+      check('[Mac Chrome link] 信号分裂采集：hasShare=true / canShareFiles=false', r.hasShare === true && r.canShareFiles === false, JSON.stringify({ hasShare: r.hasShare, canShareFiles: r.canShareFiles }))
+      check('[Mac Chrome link] link 产物含「分享」（share({url}) 本可用，不得过杀）', r.link.includes('share.system'), r.link.join(','))
+      check('[Mac Chrome link] image/video 不含「分享」（文件分享探否，如实闸）', !r.image.includes('share.system') && !r.video.includes('share.system'), `${r.image.join(',')} | ${r.video.join(',')}`)
+    },
+  },
 ]
 
 const browser = await chromium.launch()
