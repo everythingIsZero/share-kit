@@ -1,0 +1,39 @@
+{
+  "name": "@hxym18/share-kit",
+  "version": "0.1.0",
+  "description": "跨终端分享 SDK：环境决策（core）+ 浏览器适配（web）+ 海报配置（poster）+ DOM 渲染（render-dom）",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/everythingIsZero/share-kit.git"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": "./src/core/index.mjs",
+    "./web": "./src/web/index.mjs",
+    "./poster": "./src/poster/index.mjs",
+    "./render-dom": "./src/render-dom/index.mjs",
+    "./web/react": "./src/web/react.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test 'test/**/*.test.mjs'"
+  },
+  "dependencies": {
+    "html2canvas-pro": "^1.5.8",
+    "qrcode": "^1.5.4"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
