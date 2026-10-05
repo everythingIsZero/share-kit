@@ -89,7 +89,9 @@ const SCENARIOS = [
       const blob = await page.evaluate(() => document.querySelector('.share-kit-longpress img').src.startsWith('blob:'))
       check('[微信iOS] 长按引导层展示 blob 大图', blob)
       await page.click('.share-kit-longpress-close')
-      check('[微信iOS] 引导层可关闭', await page.evaluate(() => !document.querySelector('.share-kit-longpress')))
+      // 关闭有 260ms 退场动画，等 DOM 真正移除
+      await page.waitForFunction(() => !document.querySelector('.share-kit-longpress'), null, { timeout: 5000 })
+      check('[微信iOS] 引导层可关闭', true)
       // 移动布局：海报 750px 原尺寸横向滚动 + 导出图完整加载
       const layout = await page.evaluate(() => ({
         scrollable: document.getElementById('poster-host').scrollWidth > document.getElementById('poster-host').clientWidth,
