@@ -14,11 +14,31 @@
     "CHANGELOG.md"
   ],
   "exports": {
-    ".": "./src/core/index.mjs",
-    "./web": "./src/web/index.mjs",
-    "./poster": "./src/poster/index.mjs",
-    "./render-dom": "./src/render-dom/index.mjs",
-    "./web/react": "./src/web/react.mjs",
+    ".": {
+      "types": "./src/core/index.d.ts",
+      "import": "./src/core/index.mjs",
+      "default": "./src/core/index.mjs"
+    },
+    "./web": {
+      "types": "./src/web/index.d.ts",
+      "import": "./src/web/index.mjs",
+      "default": "./src/web/index.mjs"
+    },
+    "./poster": {
+      "types": "./src/poster/index.d.ts",
+      "import": "./src/poster/index.mjs",
+      "default": "./src/poster/index.mjs"
+    },
+    "./render-dom": {
+      "types": "./src/render-dom/index.d.ts",
+      "import": "./src/render-dom/index.mjs",
+      "default": "./src/render-dom/index.mjs"
+    },
+    "./web/react": {
+      "types": "./src/web/react.d.ts",
+      "import": "./src/web/react.mjs",
+      "default": "./src/web/react.mjs"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
