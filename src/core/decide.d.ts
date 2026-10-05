@@ -26,7 +26,7 @@ export interface Hint {
 
 /** 执行计划 */
 export interface ExecutivePlan {
-  /** 该环境唯一动作 */
+  /** 该环境的主推荐动作（偏好序首个可用项） */
   primary: ActionId
   /** 事前说明；null 表示该环境不需要额外说明 */
   hint: Hint | null
@@ -68,3 +68,21 @@ export declare const ARTIFACT_ACTION_GATES: Readonly<Record<string, readonly Art
 
 /** 决策入口：纯函数，非法入参返回兜底计划 */
 export declare function decideAction(input?: DecideInput | null): ExecutivePlan
+
+/** Action Sheet 项：动作 id 与主推荐标记（偏好序居首） */
+export interface ListedAction {
+  id: ActionId
+  isPrimary: boolean
+}
+
+/** 可用方式列表（Action Sheet 决策单源） */
+export interface ActionList {
+  actions: ListedAction[]
+  reason: ReasonCode
+}
+
+/**
+ * 列出该环境此刻真实可用的全部动作（纯函数）。share.system 受一次性用户激活
+ * 信号闸，首帧调用通常不含系统分享——须在点击瞬间重调才能拿到完整列表。
+ */
+export declare function listActions(input?: DecideInput | null): ActionList

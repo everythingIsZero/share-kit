@@ -172,6 +172,64 @@ function neutralPlan(reason) {
 }
 
 /**
+ * 收集该环境**此刻**可用的动作（偏好序），decideAction 与 listActions 的共享单源。
+ *
+ * 三重过滤：能力表（isAvailable）× 产物闸（artifactAllows）× 信号闸（signalsAllow）；
+ * 无条件动作（copy.link）跳过三闸恒入列，因此返回列表永不为空。
+ * 信号兜底口径与 decideAction 原实现一致：能力表给不出比 copy.link 更强的动作、
+ * 且运行时信号探得可下载时，image/video 把 save.album 插到 copy.link 之前。
+ */
+function availableActions(artifactKind, row, signals) {
+  const out = []
+  let gatedByArtifact = false
+  let gatedBySignal = false
+  let signalFallbackUsed = false
+
+  for (const actionId of ARTIFACT_PREFERENCE[artifactKind]) {
+    if (UNCONDITIONAL_ACTIONS.includes(actionId)) {
+      out.push(actionId)
+      continue
+    }
+    if (!isAvailable(row[actionId])) continue
+    if (!artifactAllows(actionId, artifactKind)) {
+      gatedByArtifact = true
+      continue
+    }
+    if (!signalsAllow(actionId, signals)) {
+      gatedBySignal = true
+      continue
+    }
+    out.push(actionId)
+  }
+
+  // 信号兜底：列表里只剩无条件动作时才试。必须有信号才算「当场探过」——
+  // 没传 signals 的调用（如首帧计划）不猜，仍只有复制链接。
+  // 能力表明确 available:false 的动作（如小程序 web-view 不能写相册）不得被特性探测推翻：
+  // a[download] 属性存在不代表下载不被宿主屏蔽，文档级否决优先于运行时信号（红线 2/5）。
+  if (out.every((id) => UNCONDITIONAL_ACTIONS.includes(id))) {
+    const fb = SIGNAL_FALLBACK[artifactKind]
+    const docDenied = fb && row[fb] && row[fb].available === false
+    if (fb && !docDenied && signals && typeof signals === 'object' && signalsAllow(fb, signals)) {
+      out.unshift(fb)
+      signalFallbackUsed = true
+    }
+  }
+
+  return { out, gatedByArtifact, gatedBySignal, signalFallbackUsed }
+}
+
+/** reason 归因（两个决策入口共用同一套短码语义） */
+function reasonOf(out, gatedByArtifact, gatedBySignal, signalFallbackUsed, untested) {
+  if (signalFallbackUsed) return REASON_CODES.signalFallback
+  // 偏好序下非兜底动作必排在 copy.link 之前，看首项即可
+  if (out[0] !== FALLBACK_ACTION) return REASON_CODES.primaryAvailable
+  if (untested) return REASON_CODES.unknownEnv
+  if (gatedByArtifact) return REASON_CODES.artifactNotSupported
+  if (gatedBySignal) return REASON_CODES.signalGated
+  return REASON_CODES.fallbackOnly
+}
+
+/**
  * 决策入口。`fingerprint` 来自 `normalizeFingerprint`，`artifactKind` 为 image / video / link，
  * `signals` 可选（适配包采集的原始信号，用于运行时否决）。
  * 纯函数：不改入参、无副作用、同输入同输出；非法入参返回兜底计划而不是抛错。
@@ -184,55 +242,40 @@ export function decideAction(input) {
   const row = capabilityRowFor(fingerprint)
   const untested = isUntestedRow(row)
 
-  let primary = null
-  let gatedByArtifact = false
-  let gatedBySignal = false
-  let signalFallbackUsed = false
-
-  for (const actionId of ARTIFACT_PREFERENCE[artifactKind]) {
-    if (UNCONDITIONAL_ACTIONS.includes(actionId)) {
-      primary = actionId
-      break
-    }
-    if (!isAvailable(row[actionId])) continue
-    if (!artifactAllows(actionId, artifactKind)) {
-      gatedByArtifact = true
-      continue
-    }
-    if (!signalsAllow(actionId, signals)) {
-      gatedBySignal = true
-      continue
-    }
-    primary = actionId
-    break
-  }
-
-  // 循环里没找到更强的动作 → 落兜底（copy.link 是无条件动作，任何环境都能做，R10）
-  if (!primary) primary = FALLBACK_ACTION
-
-  // 信号兜底：只在「已落到兜底动作」时才试——即该环境确实给不出分享/保存动作。
-  // 必须有信号才算「当场探过」：没传 signals 的调用（如首帧的中性计划）不猜，仍落复制链接。
-  if (primary === FALLBACK_ACTION) {
-    const fb = SIGNAL_FALLBACK[artifactKind]
-    if (fb && signals && typeof signals === 'object' && signalsAllow(fb, signals)) {
-      primary = fb
-      signalFallbackUsed = true
-    }
-  }
-
-  let reason
-  if (signalFallbackUsed) reason = REASON_CODES.signalFallback
-  else if (primary !== FALLBACK_ACTION) reason = REASON_CODES.primaryAvailable
-  else if (untested) reason = REASON_CODES.unknownEnv
-  else if (gatedByArtifact) reason = REASON_CODES.artifactNotSupported
-  else if (gatedBySignal) reason = REASON_CODES.signalGated
-  else reason = REASON_CODES.fallbackOnly
+  const { out, gatedByArtifact, gatedBySignal, signalFallbackUsed } = availableActions(artifactKind, row, signals)
+  const primary = out[0] // copy.link 恒在列，out 永不为空
 
   return {
     primary,
     // 下载是自明的动作，不需要事前说明；也不能拿中性文案（「复制链接…」）冒充它的说明
     hint: signalFallbackUsed ? null : pickHint(envKey, artifactKind, primary, untested, fingerprint),
     fallback: primary === FALLBACK_ACTION ? null : FALLBACK_ACTION,
-    reason,
+    reason: reasonOf(out, gatedByArtifact, gatedBySignal, signalFallbackUsed, untested),
+  }
+}
+
+/**
+ * 列出该环境**此刻**真实可用的全部动作（Action Sheet 的决策单源，红线 2）。
+ *
+ * 输入与 decideAction 相同；输出 `{ actions: [{ id, isPrimary }], reason }`：
+ * - `actions` 按产物偏好序排列，第一项即主推荐（isPrimary: true），其余为次要项；
+ * - copy.link 恒在列；若它是唯一项，主推荐落在它身上；
+ * - 信号兜底与 decideAction 同口径（能力表全灭 + 运行时探得可下载 → save.album 入列）；
+ * - share.system 受 hasTransientActivation 信号闸：**首帧调用时它通常不在列**，
+ *   必须在点击瞬间（一次性用户激活为 true 时）重调本函数，才能拿到含系统分享的完整列表。
+ */
+export function listActions(input) {
+  const { fingerprint, artifactKind, signals } = input && typeof input === 'object' ? input : {}
+  if (!isArtifactKind(artifactKind)) {
+    return { actions: [{ id: FALLBACK_ACTION, isPrimary: true }], reason: REASON_CODES.noArtifactKind }
+  }
+
+  const row = capabilityRowFor(fingerprint)
+  const untested = isUntestedRow(row)
+  const { out, gatedByArtifact, gatedBySignal, signalFallbackUsed } = availableActions(artifactKind, row, signals)
+
+  return {
+    actions: out.map((id, i) => ({ id, isPrimary: i === 0 })),
+    reason: reasonOf(out, gatedByArtifact, gatedBySignal, signalFallbackUsed, untested),
   }
 }

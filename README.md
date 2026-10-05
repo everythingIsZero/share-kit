@@ -7,11 +7,12 @@
 
 | 入口 | 职责 | 依赖 | 适用环境 |
 |---|---|---|---|
-| `share-kit`（`.`） | 决策层：环境指纹 → 唯一动作 + 事前说明 + 结果分类 | **零依赖** | 全环境（含小游戏） |
+| `share-kit`（`.`） | 决策层：环境指纹 → 动作计划 / 可用方式列表 + 事前说明 + 结果分类 | **零依赖** | 全环境（含小游戏） |
 | `share-kit/poster` | 海报配置：业务数据 → 冻结快照（纯数据） | **零依赖** | 全环境（含小游戏） |
 | `share-kit/web` | 浏览器适配层：collectSignals / executeAction / report | 零依赖 | 浏览器 |
 | `share-kit/web/react` | React 可选绑定（ShareTrigger / reduceTrigger） | react（optional peer） | React 站点 |
 | `share-kit/render-dom` | DOM→canvas 海报渲染器 | html2canvas-pro + qrcode | 浏览器 |
+| `share-kit/ui` | 通用分享挂载：按钮 + Action Sheet + 长按引导层 + 执行 + 反馈 | 零依赖 | 浏览器（无框架） |
 
 小游戏（LayaAir 等）只 import `.` 与 `./poster` 即完全不碰 DOM。
 
@@ -28,7 +29,8 @@ bun add github:everythingIsZero/share-kit
 | 导出 | 说明 |
 |---|---|
 | `normalizeFingerprint(signals)` | 原始信号 → 脱敏指纹（container / os / engine / versionBand / unknown） |
-| `decideAction({ fingerprint, artifactKind, signals })` | → 执行计划 `{ primary, hint, fallback, reason }`（一环境一动作） |
+| `decideAction({ fingerprint, artifactKind, signals })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作） |
+| `listActions({ fingerprint, artifactKind, signals })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序） |
 | `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 六动作，带证据等级） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
 | `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果四分类（成功/取消/阻断/失败）与反馈计划 |
@@ -67,35 +69,51 @@ bun add github:everythingIsZero/share-kit
 | `exportPng(canvas)` | 导出（blob URL 优先，toBlob 失败降级 dataURL） |
 | `scaleFor(w, h, budget)` | 按面积预算反推整数倍率（iOS 画布上限） |
 
-## 接入四步（海报渲染链路与 demo/index.html 实际调用一致；决策执行见上方 API 表）
+### `share-kit/ui`（通用分享挂载）
+
+| 导出 | 说明 |
+|---|---|
+| `mountShare(target, { artifact, labels?, onResult? })` | 挂载分享按钮 + Action Sheet + 长按引导层 + 执行 + 反馈，返回 `{ unmount }` |
+| `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
+
+## 接入四步（与 demo/index.html 实际调用一致）
 
 ```js
-import { normalizeFingerprint, decideAction } from 'share-kit'                 // core
-import { collectSignals, executeAction } from 'share-kit/web'                  // web
-import { resolveSpec } from 'share-kit/poster'                                 // poster
+import { resolveSpec } from 'share-kit/poster'                                  // poster
 import { qrDataUrl, posterHtml, capture, exportPng } from 'share-kit/render-dom' // render-dom
+import { mountShare } from 'share-kit/ui'                                       // ui
 
-// 1. 生成海报：业务数据 → 冻结快照 → DOM → canvas → 导出
+// 1. 生成海报：业务数据 → 冻结快照 → DOM → canvas → 导出（独立方法链，产物交给第 2 步）
 const spec = resolveSpec({ format: 'card', themeId: 'outdoor', content: { /* … */ }, qr: { url: 'https://share.hxym18.com/s/abc' } })
 const qrSrc = await qrDataUrl(spec.qr)
 host.innerHTML = posterHtml(spec, { qrDataUrl: qrSrc })
 const canvas = await capture(host.firstElementChild)
-const exported = await exportPng(canvas)   // blob 文件交给下一步
+const exported = await exportPng(canvas)
 
-// 2. 分享操作：交给决策层——微信内自动落长按预览、手机浏览器落系统面板、桌面落下载
-const normalized = normalizeFingerprint(collectSignals())
-const plan = decideAction({ fingerprint: normalized.fingerprint, artifactKind: 'image', signals: normalized.signals })
+// 2. 挂载分享：把「想分享的东西」交给 mountShare，按钮 + Action Sheet + 执行 + 反馈全在 SDK 内
+//    （artifact 是执行时取值的可变引用：先挂载、渲染完成后再补 files / imageUrl 即可）
+const artifact = { kind: 'image', url: pageUrl, title: '…', text: '…' }
+mountShare(document.getElementById('share-slot'), {
+  artifact,
+  labels: { button: '分享海报', sheetTitle: '分享这张海报' },
+  onResult: (r) => reporter.send({ /* 埋点四字段：probe / action / outcome / fingerprint */ }),
+})
 
-// 3. 执行（点击回调内直接调，勿在它之前 await 任何东西）
-const result = await executeAction(plan.primary, { files: [blobFile], url: pageUrl, copy, download, share })
+// 3. 补产物：海报就绪后填 files / imageUrl（点击执行时才取值）
+artifact.files = [new File([exported.blob], 'poster.png', { type: 'image/png' })]
+artifact.imageUrl = exported.url
 
 // 4. 分享链接统一 share.hxym18.com/s/<shareId>（复制链接 / 卡片 / 海报二维码同源）
 ```
 
+无需自己写环境分支，也无需处理点击重决策——`mountShare` 内部在点击瞬间重算可用方式列表
+（一次性用户激活只在此刻为 true，系统分享这一刻才能过信号闸），业务侧只管产物与文案。
+要完全自定义 UI 时，用 `core.listActions` + `web.executeAction` 自行组装（决策单源不变）。
+
 ## 红线（12 条，违者必改）
 
 1. **决策与渲染分离**：core 只输出执行计划与文案键，不含字面量 UI 文案、不 import 任何宿主 API；适配层只采集信号与执行，不做决策。
-2. **一环境一动作**：不输出候选列表让用户挑。按钮恒直出——没有「该环境无可用动作就不渲染」的分支，走不通时点击走引导。
+2. **Action Sheet（一环境一组真实可用的方式）**：点击分享弹出方式列表，只列能力表 + 运行时信号双重过滤后确定可用的项（绝不列会失败的项）；偏好序第一项高亮为主推荐；`preview.longpress` 在列表中呈现为「查看大图」，点击后收起列表再弹长按引导层；仅剩唯一可用动作时不弹列表直接执行；`copy.link` 恒可作为次要项。没有「该环境无可用动作就不渲染按钮」的分支。
 3. **手势内同步调用**：分享接口必须在点击回调的同步段内发出，`await` 只允许出现在调用之后。先 `await` 再调用会烧掉一次性用户激活，iOS 直接 `NotAllowedError`（单测已钉住）。
 4. **反馈落在触发元素本身**：不用 toast、不弹窗；引导层位置按安全区与容器 UI 高度动态算，禁写死坐标。
 5. **不承诺做不到的事**：微信内置浏览器内保存视频无前端路径，只给「复制链接去外部浏览器」并如实说明，不出现「已保存」语义。

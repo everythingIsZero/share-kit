@@ -34,6 +34,11 @@
       "import": "./src/render-dom/index.mjs",
       "default": "./src/render-dom/index.mjs"
     },
+    "./ui": {
+      "types": "./src/ui/index.d.ts",
+      "import": "./src/ui/index.mjs",
+      "default": "./src/ui/index.mjs"
+    },
     "./web/react": {
       "types": "./src/web/react.d.ts",
       "import": "./src/web/react.mjs",
