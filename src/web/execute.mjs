@@ -30,7 +30,11 @@ function invoke(actionId, deps) {
   if (depKey === null) return undefined
   const fn = deps[depKey]
   if (typeof fn !== 'function') throw new TypeError(`动作 ${actionId} 缺少注入实现：${depKey}`)
-  if (depKey === 'share') return fn({ files: deps.files, url: deps.url, title: deps.title, text: deps.text })
+  if (depKey === 'share') {
+    // 有文件产物时只传 files 不传 url：混传会让 iOS 系统面板 / 微信把链接当主体、图片沦为配角
+    if (deps.files && deps.files.length > 0) return fn({ files: deps.files, title: deps.title, text: deps.text })
+    return fn({ url: deps.url, title: deps.title, text: deps.text })
+  }
   if (depKey === 'download') return fn({ url: deps.url, files: deps.files, filename: deps.filename })
   return fn(deps.url)
 }

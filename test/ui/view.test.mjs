@@ -43,10 +43,14 @@ test('labels.actions 覆盖项文案，labels.button 覆盖多项时的按钮文
   assert.equal(buttonLabelOf(list, 'image', labels), '分享海报')
 })
 
-test('buttonLabelOf：唯一动作直出动作名（小程序 web-view → 复制链接）', () => {
-  const list = listActions({ fingerprint: fp('wechat-miniprogram-webview', 'ios'), artifactKind: 'image', signals: CLICK })
-  assert.deepEqual(list.actions.map((a) => a.id), ['copy.link'])
-  assert.equal(buttonLabelOf(list, 'image'), '复制链接')
+test('buttonLabelOf：link 产物唯一动作直出动作名；image 产物恒通用文案（点击先弹预览层）', () => {
+  const linkList = listActions({ fingerprint: fp('wechat-miniprogram-webview', 'ios'), artifactKind: 'link', signals: CLICK })
+  assert.deepEqual(linkList.actions.map((a) => a.id), ['copy.link'])
+  assert.equal(buttonLabelOf(linkList, 'link'), '复制链接')
+  // 小程序 web-view 里图片产物也只剩复制链接，但点击先弹海报大图——按钮不能预告「直接复制」
+  const imageList = listActions({ fingerprint: fp('wechat-miniprogram-webview', 'ios'), artifactKind: 'image', signals: CLICK })
+  assert.deepEqual(imageList.actions.map((a) => a.id), ['copy.link'])
+  assert.equal(buttonLabelOf(imageList, 'image'), '分享')
 })
 
 test('buttonLabelOf：多项动作给通用「分享」，不预示具体方式', () => {

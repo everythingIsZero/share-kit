@@ -1,12 +1,12 @@
 /**
- * sheet.mjs — Action Sheet / 长按引导层 / 引导条（DOM 薄壳 + 样式单源）
+ * sheet.mjs — Action Sheet / 海报预览层 / 引导条（DOM 薄壳 + 样式单源）
  *
  * 只做视图与交互收尾，不做决策：列什么项、哪项高亮由 view.mjs 的视图模型给定。
  * 三个浮层共用 createOverlay 工厂（遮罩 + 入退场动画 + Esc/遮罩关闭 + DOM 自清理）；
  * 样式经 ensureStyles 一次性注入（幂等 id），业务站可用 CSS 覆盖自己的视觉。
  *
  * 红线（R4）：反馈落在触发元素本身，本文件的浮层只用于「动作本体」——
- * 方式选择（sheet）与长按引导（引导层），不做 toast 式结果通知。
+ * 海报预览（预览层，图是基本操作）与方式选择（sheet 兜底），不做 toast 式结果通知。
  */
 
 const STYLE_ID = 'share-kit-ui-style'
@@ -24,13 +24,14 @@ const CSS = `
 .share-kit-badge { font-size: 11px; line-height: 17px; padding: 0 5px; color: #07c160; border: 1px solid rgba(7,193,96,.4); border-radius: 4px; }
 .share-kit-sheet-cancel { display: block; width: calc(100% - 24px); margin: 4px auto 12px; min-height: 48px; border: 0; border-radius: 12px; background: #f7f7f8; font-size: 16px; font-weight: 500; color: #222; cursor: pointer; }
 .share-kit-sheet-cancel:active { background: #ededf0; }
-.share-kit-longpress { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.88); opacity: 0; transition: opacity .22s ease; padding: 16px; }
-.share-kit-longpress.share-kit-open { opacity: 1; }
-.share-kit-longpress img { max-width: 92vw; max-height: 68vh; }
-.share-kit-longpress-tip { color: #ffd970; font-size: 15px; }
-.share-kit-longpress-actions { display: flex; gap: 12px; justify-content: center; }
-.share-kit-longpress-secondary { padding: 8px 22px; border: 1px solid rgba(255,255,255,.35); border-radius: 20px; background: none; color: #fff; font-size: 13px; cursor: pointer; }
-.share-kit-longpress-close { padding: 8px 22px; border: 1px solid #777; border-radius: 20px; background: none; color: #ccc; font-size: 13px; cursor: pointer; }
+.share-kit-preview { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.88); opacity: 0; transition: opacity .22s ease; padding: 16px; }
+.share-kit-preview.share-kit-open { opacity: 1; }
+.share-kit-preview img { max-width: 92vw; max-height: 68vh; }
+.share-kit-preview-tip { color: #ffd970; font-size: 15px; }
+.share-kit-preview-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.share-kit-preview-btn { padding: 8px 22px; border: 1px solid rgba(255,255,255,.35); border-radius: 20px; background: none; color: #fff; font-size: 13px; cursor: pointer; }
+.share-kit-preview-btn.primary { border-color: transparent; background: #07c160; font-weight: 600; }
+.share-kit-preview-close { padding: 8px 22px; border: 1px solid #777; border-radius: 20px; background: none; color: #ccc; font-size: 13px; cursor: pointer; }
 .share-kit-tip { position: fixed; top: 0; left: 50%; transform: translate(-50%, -110%); z-index: 9992; margin-top: max(12px, env(safe-area-inset-top, 0px)); padding: 10px 16px; max-width: 86vw; border-radius: 10px; background: rgba(17,17,17,.92); color: #fff; font-size: 14px; line-height: 1.5; transition: transform .28s ease; }
 .share-kit-tip.share-kit-open { transform: translate(-50%, 0); }
 .share-kit-trigger { display: block; width: 100%; padding: 12px 16px; border: 0; border-radius: 10px; background: #07c160; color: #fff; font-size: 15px; font-weight: 500; cursor: pointer; }
@@ -130,46 +131,50 @@ export function showActionSheet({ title, items, onSelect }) {
 }
 
 /**
- * 长按引导层：全屏大图 + 「长按保存」提示（preview.longpress 的动作本体）。
- * `secondary` 可带一个次要方式（如「复制链接」）——主推荐直出引导层时，
- * 次要方式不丢失，仍可从层内一键触达。
+ * 海报预览层：全屏大图 + 可选提示 + 层内方式按钮行（图片产物点击分享的统一入口）。
+ * 图是基本操作——先见图，方式收进层内，选择权不丢失；长按保存不渲染按钮，
+ * 大图本身可长按，由 `tip` 说明。`actions` 为 `[{ id, label, isPrimary, onSelect }]`，
+ * `id` 落到 `data-action` 供验收与业务定位；关闭按钮由层自带、恒在行尾。
  */
-export function showLongpressOverlay({ imageUrl, secondary }) {
+export function showPreviewOverlay({ imageUrl, tip, actions }) {
   return createOverlay({
     build: (close) => {
       const panel = document.createElement('div')
-      panel.className = 'share-kit-longpress'
+      panel.className = 'share-kit-preview'
       panel.setAttribute('role', 'dialog')
       panel.setAttribute('aria-modal', 'true')
 
       const img = document.createElement('img')
       img.src = imageUrl
-      img.alt = '长按保存这张图片'
-      const tip = document.createElement('div')
-      tip.className = 'share-kit-longpress-tip'
-      // 微信内长按图片的菜单同时有「保存图片」与「发送给朋友」——转发这条路必须说出来
-      tip.textContent = '长按图片，可保存或发送给朋友'
+      img.alt = '分享图片预览'
+      panel.appendChild(img)
 
-      const btn = document.createElement('button')
-      btn.type = 'button'
-      btn.className = 'share-kit-longpress-close'
-      btn.textContent = '关闭'
-      btn.addEventListener('click', close)
-
-      // 次要方式（如复制链接）与关闭并排一行——上下堆叠浪费纵向空间，大图能占更高
-      if (secondary && typeof secondary.onSelect === 'function') {
-        const alt = document.createElement('button')
-        alt.type = 'button'
-        alt.className = 'share-kit-longpress-secondary'
-        alt.textContent = secondary.label || '复制链接'
-        alt.addEventListener('click', () => secondary.onSelect())
-        const actions = document.createElement('div')
-        actions.className = 'share-kit-longpress-actions'
-        actions.append(alt, btn)
-        panel.append(img, tip, actions)
-      } else {
-        panel.append(img, tip, btn)
+      if (tip) {
+        const tipEl = document.createElement('div')
+        tipEl.className = 'share-kit-preview-tip'
+        tipEl.textContent = tip
+        panel.appendChild(tipEl)
       }
+
+      const row = document.createElement('div')
+      row.className = 'share-kit-preview-actions'
+      for (const act of Array.isArray(actions) ? actions : []) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'share-kit-preview-btn' + (act.isPrimary ? ' primary' : '')
+        btn.dataset.action = act.id
+        btn.textContent = act.label
+        btn.addEventListener('click', () => act.onSelect())
+        row.appendChild(btn)
+      }
+
+      const closeBtn = document.createElement('button')
+      closeBtn.type = 'button'
+      closeBtn.className = 'share-kit-preview-close'
+      closeBtn.textContent = '关闭'
+      closeBtn.addEventListener('click', close)
+      row.appendChild(closeBtn)
+      panel.appendChild(row)
       return panel
     },
   }).close

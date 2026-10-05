@@ -4,8 +4,8 @@
  * 对线上 https://share.hxym18.com/demo/ 用七组真实 UA 逐场景断言：
  *   ① 环境识别四维（容器 / 系统 / 内核 / 版本带）——决策层 UA 规则的真机口径验证；
  *   ② 首帧决策（primary / reason / hint 有无 / 首帧可用方式）；
- *   ③ Action Sheet 交互：项与主推荐、二级长按引导层、唯一动作直出不弹列表、
- *      sheet 项点击后真下载 / stub 系统分享参数 / 复制调用；
+ *   ③ 预览层交互：点击先弹海报大图（blob 图源 / 长按提示 / 层内方式按钮与主推荐），
+ *      层内按钮点击后真下载 / stub 系统分享参数（只传图不带 url）/ 复制调用；
  *   ④ 移动布局（海报横向滚动 / 导出图加载）；
  *   ⑤ 二维码可识读（jsQR 解码导出画布右下码区，等价扫码器识读）。
  *
@@ -54,24 +54,26 @@ function checkEnv(name, env, e) {
   }
 }
 
-/** 点击分享按钮 → 弹出 Action Sheet → 返回项数据（Playwright 真实输入，会激活 userActivation） */
-async function openSheet(page) {
+/** 点击分享按钮 → 弹出海报预览层 → 返回层内按钮数据（Playwright 真实输入，会激活 userActivation） */
+async function openPreview(page) {
   await page.click('.share-kit-trigger', { timeout: 10000 })
-  await page.waitForSelector('.share-kit-sheet', { timeout: 10000 })
-  return page.evaluate(() =>
-    [...document.querySelectorAll('.share-kit-sheet-item')].map((b) => ({
+  await page.waitForSelector('.share-kit-preview img', { timeout: 10000 })
+  return page.evaluate(() => ({
+    blob: document.querySelector('.share-kit-preview img').src.startsWith('blob:'),
+    tip: document.querySelector('.share-kit-preview-tip') ? document.querySelector('.share-kit-preview-tip').textContent : null,
+    btns: [...document.querySelectorAll('.share-kit-preview-btn')].map((b) => ({
       action: b.dataset.action,
       primary: b.classList.contains('primary'),
-    }))
-  )
+    })),
+  }))
 }
 
-/** 断言 sheet 项与主推荐（expect: [{ action, primary }]，顺序即偏好序） */
-function checkSheet(name, items, expect) {
-  const got = items ? items.map((i) => `${i.action}${i.primary ? '*' : ''}`).join(',') : '无 sheet'
+/** 断言层内按钮与主推荐（expect: [{ action, primary }]，顺序即偏好序剔长按项） */
+function checkLayer(name, layer, expect) {
+  const got = layer ? layer.btns.map((b) => `${b.action}${b.primary ? '*' : ''}`).join(',') : '无预览层'
   const ok =
-    items && items.length === expect.length && expect.every((e, i) => items[i].action === e.action && items[i].primary === !!e.primary)
-  check(`[${name}] sheet=${expect.map((e) => e.action).join(',')}${expect.some((e) => e.primary) ? '（首项主推荐）' : ''}`, ok, got)
+    layer && layer.btns.length === expect.length && expect.every((e, i) => layer.btns[i].action === e.action && layer.btns[i].primary === !!e.primary)
+  check(`[${name}] 层内方式=${expect.map((e) => e.action).join(',')}${expect.some((e) => e.primary) ? '（首项主推荐）' : ''}`, ok, got)
 }
 
 const SCENARIOS = [
@@ -81,16 +83,16 @@ const SCENARIOS = [
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
     expect: { container: 'wechat', os: 'ios', engine: 'wkwebview', versionBand: 'ios-17', primary: 'preview.longpress', reason: 'primary-available', hint: 'non-null', firstList: 'preview.longpress,copy.link' },
     async interact(page) {
-      // 微信内主推荐是长按保存（引导型）：不弹方式列表，直接弹大图长按引导层（最短路径）
-      await page.click('.share-kit-trigger', { timeout: 10000 })
-      await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
-      check('[微信iOS] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
-      check('[微信iOS] 长按引导层展示 blob 大图', await page.evaluate(() => document.querySelector('.share-kit-longpress img').src.startsWith('blob:')))
-      check('[微信iOS] 层内有「复制链接」次要方式', await page.evaluate(() => document.querySelector('.share-kit-longpress-secondary').textContent === '复制链接'))
-      await page.click('.share-kit-longpress-close')
+      // 微信内：点按钮先弹海报预览层（图是基本操作），长按保存即大图本身，复制链接收在层内
+      const layer = await openPreview(page)
+      check('[微信iOS] 点击先弹海报大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      check('[微信iOS] 预览层展示 blob 大图', layer.blob)
+      check('[微信iOS] 层内有长按提示（保存 + 发送给朋友）', layer.tip && layer.tip.includes('长按') && layer.tip.includes('发送给朋友'), layer.tip)
+      checkLayer('微信iOS', layer, [{ action: 'copy.link', primary: false }])
+      await page.click('.share-kit-preview-close')
       // 关闭有 260ms 退场动画，等 DOM 真正移除
-      await page.waitForFunction(() => !document.querySelector('.share-kit-longpress'), null, { timeout: 5000 })
-      check('[微信iOS] 引导层可关闭', true)
+      await page.waitForFunction(() => !document.querySelector('.share-kit-preview'), null, { timeout: 5000 })
+      check('[微信iOS] 预览层可关闭', true)
       // 移动布局：海报 750px 原稿缩放到一屏全貌 + 导出图完整加载
       const layout = await page.evaluate(() => {
         const host = document.getElementById('poster-host')
@@ -109,10 +111,11 @@ const SCENARIOS = [
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
     expect: { container: 'wechat', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', hint: 'non-null', firstList: 'preview.longpress,copy.link' },
     async interact(page) {
-      // 微信内直出冒烟：点击即弹大图长按引导层
-      await page.click('.share-kit-trigger', { timeout: 10000 })
-      await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
-      check('[微信Android] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      // 微信内直出冒烟：点击先弹海报大图预览层（长按可保存 / 发送给朋友）
+      const layer = await openPreview(page)
+      check('[微信Android] 点击先弹海报大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      check('[微信Android] 预览层展示 blob 大图', layer.blob)
+      check('[微信Android] 层内有长按提示', !!layer.tip, layer.tip)
     },
   },
   {
@@ -121,13 +124,15 @@ const SCENARIOS = [
     viewport: { width: 1280, height: 900 },
     expect: { container: 'wechat-desktop', os: 'macos', engine: 'unknown', versionBand: 'macos-10', primary: 'save.album', reason: 'signal-fallback', hint: 'null', firstList: 'save.album,copy.link' },
     async interact(page) {
-      // PC 微信：无长按无相册 → sheet 信号兜底给「保存图片」→ 选择后真实下载
-      const items = await openSheet(page)
-      checkSheet('微信桌面Mac', items, [{ action: 'save.album', primary: true }, { action: 'copy.link', primary: false }])
+      // PC 微信：无长按无相册 → 预览层内主推荐=信号兜底的「保存图片」→ 点击真实下载
+      const layer = await openPreview(page)
+      check('[微信桌面Mac] 预览层展示 blob 大图', layer.blob)
+      check('[微信桌面Mac] PC 无长按菜单不出长按提示', layer.tip === null, layer.tip)
+      checkLayer('微信桌面Mac', layer, [{ action: 'save.album', primary: true }, { action: 'copy.link', primary: false }])
       const dl = page.waitForEvent('download', { timeout: 15000 })
-      await page.click('.share-kit-sheet-item[data-action="save.album"]')
+      await page.click('.share-kit-preview-btn[data-action="save.album"]')
       const download = await dl
-      check('[微信桌面Mac] 选择保存后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
+      check('[微信桌面Mac] 层内选保存后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
     },
   },
   {
@@ -143,11 +148,13 @@ const SCENARIOS = [
       }
     },
     async interact(page) {
-      // 唯一可用动作：不弹 sheet 直接执行复制，反馈落在按钮
-      await page.click('.share-kit-trigger', { timeout: 10000 })
+      // 唯一可用动作 copy.link：图片产物仍先弹海报大图（图是基本操作），复制收在层内按钮
+      const layer = await openPreview(page)
+      check('[小程序webview] 点击先弹海报大图（无 sheet）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      checkLayer('小程序webview', layer, [{ action: 'copy.link', primary: true }])
+      await page.click('.share-kit-preview-btn[data-action="copy.link"]')
       await page.waitForFunction(() => window.__copied, null, { timeout: 10000 })
-      check('[小程序webview] 唯一动作直出：复制了页面链接', await page.evaluate(() => window.__copied === location.href))
-      check('[小程序webview] 未弹方式列表', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      check('[小程序webview] 层内复制链接：复制了页面链接', await page.evaluate(() => window.__copied === location.href))
       check('[小程序webview] 按钮反馈「链接已复制」', await page.evaluate(() => document.querySelector('.share-kit-trigger').textContent === '链接已复制'))
     },
   },
@@ -161,10 +168,11 @@ const SCENARIOS = [
       navigator.canShare = () => false
     },
     async interact(page) {
-      // 无系统分享的 iOS 浏览器：主推荐也是长按保存 → 直出大图引导层
-      await page.click('.share-kit-trigger', { timeout: 10000 })
-      await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
-      check('[iOS Safari] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      // 无系统分享的 iOS 浏览器：主推荐也是长按保存 → 点击先弹大图预览层
+      const layer = await openPreview(page)
+      check('[iOS Safari] 主推荐长按：点击先弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      check('[iOS Safari] 预览层展示 blob 大图', layer.blob)
+      check('[iOS Safari] 层内有长按提示', !!layer.tip, layer.tip)
     },
   },
   {
@@ -173,21 +181,23 @@ const SCENARIOS = [
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
     expect: { container: 'browser', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', firstList: 'preview.longpress,copy.link' },
     init: () => {
-      // stub 系统分享：canShareFiles 探测过 → 点击瞬间（transient 激活）share.system 入列成为主推荐
+      // stub 系统分享：canShareFiles 探测过 → 点击瞬间（transient 激活）share.system 入列成为主推荐；
+      // 同时记录 url 是否混入——分享图就是图，url 混传会让 iOS 面板把链接当主体
       navigator.canShare = () => true
       navigator.share = (d) => {
         const f = d.files && d.files[0]
-        window.__shareCalled = { name: f && f.name, type: f && f.type }
+        window.__shareCalled = { name: f && f.name, type: f && f.type, url: d.url ?? null }
         return Promise.resolve()
       }
     },
     async interact(page) {
-      const items = await openSheet(page)
-      checkSheet('Android Chrome', items, [{ action: 'share.system', primary: true }, { action: 'preview.longpress', primary: false }, { action: 'copy.link', primary: false }])
-      await page.click('.share-kit-sheet-item[data-action="share.system"]')
+      const layer = await openPreview(page)
+      checkLayer('Android Chrome', layer, [{ action: 'share.system', primary: true }, { action: 'copy.link', primary: false }])
+      await page.click('.share-kit-preview-btn[data-action="share.system"]')
       await page.waitForFunction(() => window.__shareCalled, null, { timeout: 10000 })
       const called = await page.evaluate(() => window.__shareCalled)
-      check('[Android Chrome] sheet 选系统分享：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
+      check('[Android Chrome] 层内选系统分享：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
+      check('[Android Chrome] 系统分享只传图不带 url（图是主体）', called && called.url === null, JSON.stringify(called && called.url))
     },
   },
   {
@@ -196,11 +206,11 @@ const SCENARIOS = [
     viewport: { width: 1280, height: 900 },
     expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.album', reason: 'primary-available', hint: 'null', firstList: 'save.album,copy.link' },
     async interact(page) {
-      // 桌面：sheet 主推荐取决于无头环境是否探得 canShare（两者都合法），保存项恒在 → 选择后下载 + 二维码识读
-      const items = await openSheet(page)
-      check('[Mac Chrome] sheet 主推荐=偏好序首个可用项', items.length >= 2 && items[0].primary === true && ['share.system', 'save.album'].includes(items[0].action), items.map((i) => `${i.action}${i.primary ? '*' : ''}`).join(','))
+      // 桌面：预览层主推荐取决于无头环境是否探得 canShare（两者都合法），保存项恒在 → 层内选择后下载 + 二维码识读
+      const layer = await openPreview(page)
+      check('[Mac Chrome] 层内主推荐=偏好序首个可用项', layer.btns.length >= 2 && layer.btns[0].primary === true && ['share.system', 'save.album'].includes(layer.btns[0].action), layer.btns.map((b) => `${b.action}${b.primary ? '*' : ''}`).join(','))
       const dl = page.waitForEvent('download', { timeout: 15000 })
-      await page.click('.share-kit-sheet-item[data-action="save.album"]')
+      await page.click('.share-kit-preview-btn[data-action="save.album"]')
       const download = await dl
       check('[Mac Chrome] 选择保存后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
       await page.addScriptTag({ content: jsqrCode })

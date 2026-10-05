@@ -8,7 +8,7 @@ export function sheetItemsOf(
   labels?: ShareLabels
 ): Array<{ id: string; label: string; isPrimary: boolean }>
 
-/** 按钮文案：唯一可用动作直出动作名；多项时通用「分享」（labels.button 可覆盖） */
+/** 按钮文案：image 恒通用「分享」（点击先弹预览层）；link/video 唯一动作直出动作名（labels.button 可覆盖） */
 export function buttonLabelOf(
   list: { actions: Array<{ id: string; isPrimary: boolean }> },
   artifactKind: string,

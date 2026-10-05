@@ -49,6 +49,19 @@ test('同步阶段契约：注入实现先同步被调用，await 只在其后',
   assert.equal(result.outcome, 'done')
 })
 
+test('系统分享传参：有 files 只传图不带 url（防 iOS 面板把链接当主体），无 files 才传 url', async () => {
+  let seen = null
+  const deps = (extra) => ({ url: 'https://example.com/p', ...extra, share: (d) => { seen = d; return Promise.resolve() } })
+  // 有文件：分享图就是图，url 不得混入
+  await executeAction('share.system', deps({ files: [{ name: 'poster.png' }] }))
+  assert.equal(seen.url, undefined, '有 files 时不得传 url')
+  assert.equal(seen.files.length, 1)
+  // 无文件（link 产物）：url 是分享主体
+  await executeAction('share.system', deps({ files: undefined }))
+  assert.equal(seen.url, 'https://example.com/p')
+  assert.equal(seen.files, undefined)
+})
+
 test('引导类动作不调用外部实现：mode 为 guidance', async () => {
   const result = await executeAction('preview.longpress', {})
   assert.equal(result.mode, 'guidance')

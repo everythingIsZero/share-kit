@@ -17,7 +17,7 @@
     .kv { display: flex; justify-content: space-between; gap: 12px; }
     .kv b { font-weight: 600; color: #444; flex-shrink: 0; }
     .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-    /* 分享按钮 / Action Sheet / 长按引导层的样式均由 SDK 注入（share-kit-ui-style） */
+    /* 分享按钮 / 海报预览层 / Action Sheet 的样式均由 SDK 注入（share-kit-ui-style） */
     #share-slot { margin-top: 10px; }
     /* ④ 各环境行为预览矩阵：当前环境行高亮 */
     .env-row { border: 1px solid #e5e7eb; border-left: 3px solid #d1d5db; border-radius: 8px; padding: 8px 12px; margin: 6px 0; background: #fff; font-size: 13px; line-height: 1.7; }
@@ -46,8 +46,8 @@
   <h2>② 环境识别（真机验证请截图这一卡）</h2>
   <div class="card" id="env-card">采集中…</div>
 
-  <!-- ③ 分享操作：mountShare 挂载（Action Sheet：点击弹出该环境真实可用的方式） -->
-  <h2>③ 分享 / 保存（点击弹出可用方式 · 主推荐高亮）</h2>
+  <!-- ③ 分享操作：mountShare 挂载（点击先弹海报大图，方式收进层内；无图产物走 sheet 兜底） -->
+  <h2>③ 分享 / 保存（点击先弹海报大图 · 方式在层内 · 主推荐高亮）</h2>
   <div id="share-slot"></div>
 
   <!-- ④ 各环境行为预览：listActions 纯函数喂模拟指纹，与真实点击共用决策单源 -->
@@ -153,15 +153,10 @@
       const fp = { container, os, engine: 'unknown', versionBand: 'unknown' }
       const list = listActions({ fingerprint: fp, artifactKind: 'image', signals: env.signals })
       const items = sheetItemsOf(list, 'image', null)
-      // 三种交互形态，与 mountShare 点击行为一一对应：长按直出 / 唯一动作直出 / 弹列表
-      let behavior
-      if (list.actions[0].id === 'preview.longpress') {
-        behavior = '点按钮直接弹大图（长按可保存 / 发送给朋友，层内另有「复制链接」）'
-      } else if (items.length === 1) {
-        behavior = `点按钮不弹列表，直接执行「${items[0].label}」`
-      } else {
-        behavior = `点按钮弹方式列表：${items.map((it) => (it.isPrimary ? `${it.label}（推荐）` : it.label)).join(' / ')}`
-      }
+      // 统一预览层形态：点击先弹海报大图，方式收进层内（长按保存即大图本身，不占按钮位）
+      const layerItems = items.filter((it) => it.id !== 'preview.longpress')
+      const hasLongpress = list.actions.some((a) => a.id === 'preview.longpress')
+      const behavior = `点按钮先弹海报大图${hasLongpress ? '（长按可保存 / 发送给朋友）' : ''}，层内方式：${layerItems.map((it) => (it.isPrimary ? `${it.label}（推荐）` : it.label)).join(' / ')}`
       const here = env.keys.includes(currentEnvKey)
       return `<div class="env-row${here ? ' current' : ''}">
         <div class="env-name">${env.label}${here ? '<span class="env-here">你在这里</span>' : ''}</div>
@@ -213,7 +208,7 @@
       status.textContent = `海报完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}，原稿 750px 已缩放适配屏幕）`
       fitPoster()
 
-      // 产物就绪后挂载 Action Sheet 形态分享（按钮 + sheet + 长按引导层 + 执行全在 SDK 内）
+      // 产物就绪后挂载分享（按钮 + 海报预览层 + sheet 兜底 + 执行全在 SDK 内）
       window.__share = mountShare(document.getElementById('share-slot'), {
         artifact,
         labels: { button: '分享海报', sheetTitle: '分享这张海报' },

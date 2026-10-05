@@ -2,22 +2,23 @@
  * mount.mjs — mountShare：通用分享挂载（高层 API，无框架）
  *
  * 业务站把「想分享的东西」作为 artifact 传入，得到一个分享按钮与全部后续交互：
- * 点击 → 该环境真实可用的方式列表（Action Sheet）→ 选择后执行 → 反馈落在按钮上。
+ * 点击 → **图片产物先弹海报预览层**（大图 + 层内方式按钮，长按保存即大图本身）；
+ * 无图可显（link / video 产物、图未就绪）弹 Action Sheet 兜底 → 选择后执行 → 反馈落在按钮上。
  * 海报生成不在此处：那是 render-dom 的独立方法链，业务先产 blob / 文件再放进 artifact。
  *
  * 红线落点：
- * - 红线 2：列表项来自 core `listActions`（能力表 + 运行时信号双重过滤），绝不列会失败的项；
- * - R14 手势内同步调用：唯一动作直出与 sheet 项点击，executeAction 都在点击同步段发起；
+ * - 红线 2：层内按钮与 sheet 项都来自 core `listActions`（能力表 + 运行时信号双重过滤），绝不列会失败的项；
+ * - R14 手势内同步调用：唯一动作直出与层内 / sheet 项点击，executeAction 都在点击同步段发起；
  * - R4 反馈落在触发元素：结果文案写回按钮本身，不用 toast 弹窗。
  *
  * 时序要点：share.system 受一次性用户激活信号闸，首帧探不到——列表必须在**点击瞬间**
- * 重算才能拿到含系统分享的完整列表；首帧列表只用于决定按钮文案（唯一动作时直出动作名）。
+ * 重算才能拿到含系统分享的完整列表；首帧列表只用于决定按钮文案。
  */
 
 import { listActions, normalizeFingerprint, renderCopy } from '../core/index.mjs'
 import { collectSignals, executeAction } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
-import { ensureStyles, showActionSheet, showLongpressOverlay, showTipBar } from './sheet.mjs'
+import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
 
 /** 直接下载（save.album）：a[download] 点击（落点由环境决定——手机进相册/下载，桌面进下载目录） */
 function defaultDownload({ url, filename }) {
@@ -98,11 +99,12 @@ export function mountShare(target, options = {}) {
 
   // 首帧：只决定按钮文案（激活信号此时尚未发生，列表不可信，不用于执行）
   const firstList = decideNow(collectSignals())
+  const initialLabel = buttonLabelOf(firstList, kind, labels)
   ensureStyles()
   const button = document.createElement('button')
   button.type = 'button'
   button.className = 'share-kit-trigger'
-  button.textContent = buttonLabelOf(firstList, kind, labels)
+  button.textContent = initialLabel
   target.appendChild(button)
 
   let disposed = false
@@ -122,47 +124,68 @@ export function mountShare(target, options = {}) {
     setLabel('正在处理…')
     Promise.resolve(executeAction(actionId, deps)).then((result) => {
       if (disposed) return
-      setLabel(result.ok ? doneLabel(result.action) : '没完成，再点一次试试')
-      if (result.mode === 'guidance') {
-        if (result.action === 'preview.longpress') {
-          const src = fileImageUrl(artifact)
-          if (src) overlayClose = showLongpressOverlay({ imageUrl: src, secondary: copySecondary() })
-        } else {
-          // share.card.wx / share.card.miniapp：卡片由宿主菜单转发，给一步引导提示
-          showTipBar(renderCopy('card-wx-link'))
-        }
+      if (result.ok) {
+        setLabel(doneLabel(result.action))
+      } else if (result.outcome === 'cancelled') {
+        // 用户取消不是失败：静默复原按钮，不显示「没完成」（AbortError 与真失败分开归因，R8）
+        setLabel(initialLabel)
+      } else {
+        setLabel('没完成，再点一次试试')
+      }
+      if (result.mode === 'guidance' && result.ok) {
+        // share.card.wx / share.card.miniapp：卡片由宿主菜单转发，给一步引导提示
+        showTipBar(renderCopy('card-wx-link'))
       }
       if (typeof onResult === 'function') onResult(result)
     })
   }
 
-  // 长按引导层内的次要方式（copy.link 无条件可用，恒可作次要项）
-  function copySecondary() {
-    return { label: '复制链接', onSelect: () => run('copy.link') }
+  /**
+   * 海报预览层（图片产物点击的统一入口）：大图 + 可选长按提示 + 层内方式按钮行。
+   * preview.longpress 不渲染按钮——大图本身可长按，由 tip 说明；其余动作逐个转按钮
+   * （主推荐高亮），点击收层后在同一手势的同步段执行（R14）。
+   */
+  function openPreview(list) {
+    const items = sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress')
+    const hasLongpress = list.actions.some((a) => a.id === 'preview.longpress')
+    overlayClose = showPreviewOverlay({
+      imageUrl: fileImageUrl(artifact),
+      tip: hasLongpress ? '长按图片，可保存或发送给朋友' : null,
+      actions: items.map((i) => ({
+        id: i.id,
+        label: i.label,
+        isPrimary: i.isPrimary,
+        onSelect: () => {
+          if (typeof overlayClose === 'function') {
+            const close = overlayClose
+            overlayClose = null
+            close()
+          }
+          run(i.id)
+        },
+      })),
+    })
   }
 
   function handleClick() {
     if (disposed) return
     // 点击瞬间重决策（同步纯函数，不烧激活）：一次性用户激活只在此刻为 true
     const list = decideNow(collectSignals())
-    const primary = list.actions[0].id
-    // 主推荐是长按保存（引导型）：直接弹大图引导层，不弹方式列表——
-    // 长按层自带完整上下文（大图 + 长按提示），经 sheet 中转反而多一步；
-    // 次要方式（复制链接）收进层内，选择权不丢失
-    if (primary === 'preview.longpress') {
-      const src = fileImageUrl(artifact)
-      if (src) {
-        overlayClose = showLongpressOverlay({ imageUrl: src, secondary: copySecondary() })
-        return
-      }
+    // 图是基本操作：图片产物先弹海报预览层，方式收进层内（出资人拍板，不再先弹无图列表）
+    if (kind === 'image' && fileImageUrl(artifact)) {
+      openPreview(list)
+      return
     }
-    if (list.actions.length === 1) {
-      run(primary) // 唯一动作：不弹列表，同步段直接执行（R14）
+    // 无图可显（link / video 产物，或图未就绪）：Action Sheet 兜底；
+    // preview.longpress 没有大图可长按，剔出列表避免死项
+    const items = sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress')
+    if (items.length === 1) {
+      run(items[0].id) // 唯一动作：不弹列表，同步段直接执行（R14）
       return
     }
     overlayClose = showActionSheet({
       title: sheetTitleOf(labels),
-      items: sheetItemsOf(list, kind, labels),
+      items,
       onSelect: run, // sheet 项点击回调内同步发起执行（新手势，R14 同样满足）
     })
   }

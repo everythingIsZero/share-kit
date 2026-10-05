@@ -12,7 +12,7 @@
 | `share-kit/web` | 浏览器适配层：collectSignals / executeAction / report | 零依赖 | 浏览器 |
 | `share-kit/web/react` | React 可选绑定（ShareTrigger / reduceTrigger） | react（optional peer） | React 站点 |
 | `share-kit/render-dom` | DOM→canvas 海报渲染器 | html2canvas-pro + qrcode | 浏览器 |
-| `share-kit/ui` | 通用分享挂载：按钮 + Action Sheet + 长按引导层 + 执行 + 反馈 | 零依赖 | 浏览器（无框架） |
+| `share-kit/ui` | 通用分享挂载：按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈 | 零依赖 | 浏览器（无框架） |
 
 小游戏（LayaAir 等）只 import `.` 与 `./poster` 即完全不碰 DOM。
 
@@ -73,7 +73,7 @@ bun add github:everythingIsZero/share-kit
 
 | 导出 | 说明 |
 |---|---|
-| `mountShare(target, { artifact, labels?, onResult? })` | 挂载分享按钮 + Action Sheet + 长按引导层 + 执行 + 反馈，返回 `{ unmount }` |
+| `mountShare(target, { artifact, labels?, onResult? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
 ## 接入
@@ -85,7 +85,7 @@ bun add github:everythingIsZero/share-kit
 | 时机 | 你的页面发生什么 | 明确不会发生什么 |
 |---|---|---|
 | 调用 `mountShare`（挂载） | ① 挂载点 `target` 末尾插入 1 个分享按钮（`button.share-kit-trigger`）；② `head` 插入 1 份样式表（id=`share-kit-ui-style`，幂等，全页仅一份） | 不改页面任何已有 DOM 与样式；不挂 `window` 全局变量；不监听全局事件 |
-| 用户点击分享按钮 | 按环境走最短路径：微信内**直接弹大图长按引导层**；有多个可用方式弹底部 Action Sheet；仅剩唯一方式不弹直接执行。浮层插在 `body` 末尾（fixed + 高 z-index），关闭后约 260ms 自动从 DOM 移除 | 不跳页不刷新；浮层用的图是你传入的本地 blob，不发网络请求 |
+| 用户点击分享按钮 | **图片产物先弹海报预览层**：全屏大图 + 该环境真实可用方式的按钮行（主推荐高亮，长按可保存的环境附长按提示，长按保存即大图本身）；链接 / 视频产物（无图可显）弹底部 Action Sheet。浮层插在 `body` 末尾（fixed + 高 z-index），关闭后约 260ms 自动从 DOM 移除 | 不跳页不刷新；浮层用的图是你传入的本地 blob，不发网络请求 |
 | 用户选定方式后 | 按方式执行：系统分享面板 / `a[download]` 下载 / 剪贴板复制（失败自动落 execCommand）；结果反馈写在**按钮文案**上 | 不用 toast 弹窗；SDK 不发任何统计请求（埋点走你传入的 `onResult`） |
 | `unmount()`（卸载） | 按钮移除、事件解绑、浮层收起 | 页面其余部分与你接入前完全一致 |
 
@@ -97,7 +97,7 @@ blob / File，填进 `artifact`。`artifact` 是执行时取值的引用：可�
 
 | 你的页面 | artifact 传什么 | 微信内用户看到 | 浏览器用户看到 |
 |---|---|---|---|
-| 车型报价 / 商品页（分享海报） | `kind:'image'` + `files:[海报File]` + `imageUrl` | 点「分享海报」→ 直接弹大图 → 长按保存（「复制链接」在层内） | 点「分享海报」→ 弹方式列表：系统分享 / 长按保存海报 / 复制链接 |
+| 车型报价 / 商品页（分享海报） | `kind:'image'` + `files:[海报File]` + `imageUrl` | 点「分享海报」→ 先弹海报大图 → 长按保存 / 发送给朋友（「复制链接」在层内） | 点「分享海报」→ 先弹海报大图 → 层内选「系统分享」（长按大图也可保存） |
 | 内容页（文章 / 攻略，分享链接） | `kind:'link'` + `url` | 弹方式列表：分享到微信（卡片）/ 复制链接 | 系统分享链接 / 复制链接 |
 | 视频页 | `kind:'video'` + `files:[视频File]` | 微信内视频无前端保存路径 → 复制链接 | 系统分享 / 保存 |
 
@@ -137,7 +137,7 @@ artifact.imageUrl = exported.url
 ## 红线（12 条，违者必改）
 
 1. **决策与渲染分离**：core 只输出执行计划与文案键，不含字面量 UI 文案、不 import 任何宿主 API；适配层只采集信号与执行，不做决策。
-2. **Action Sheet（一环境一组真实可用的方式）**：点击分享弹出方式列表，只列能力表 + 运行时信号双重过滤后确定可用的项（绝不列会失败的项）；偏好序第一项高亮为主推荐；`preview.longpress` 在列表中呈现为「查看大图」，点击后收起列表再弹长按引导层；仅剩唯一可用动作时不弹列表直接执行；`copy.link` 恒可作为次要项。没有「该环境无可用动作就不渲染按钮」的分支。
+2. **先见图，再选方式（一环境一组真实可用的方式）**：点击分享，图片产物先弹海报预览层（大图 + 方式按钮行 + 长按提示）；方式只列能力表 + 运行时信号双重过滤后确定可用的项（绝不列会失败的项），偏好序第一项高亮为主推荐；`preview.longpress` 不渲染按钮——大图本身可长按，由层内提示说明；`copy.link` 恒可作为次要项。没有「该环境无可用动作就不渲染按钮」的分支。
 3. **手势内同步调用**：分享接口必须在点击回调的同步段内发出，`await` 只允许出现在调用之后。先 `await` 再调用会烧掉一次性用户激活，iOS 直接 `NotAllowedError`（单测已钉住）。
 4. **反馈落在触发元素本身**：不用 toast、不弹窗；引导层位置按安全区与容器 UI 高度动态算，禁写死坐标。
 5. **不承诺做不到的事**：微信内置浏览器内保存视频无前端路径，只给「复制链接去外部浏览器」并如实说明，不出现「已保存」语义。

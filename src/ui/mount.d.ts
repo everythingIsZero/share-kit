@@ -11,7 +11,7 @@ export interface ShareArtifact {
   files?: Array<File> | undefined
   /** 下载文件名（save.album） */
   filename?: string
-  /** 图片直链：长按引导层大图源与下载源（缺省时用 files[0] 现造 blob URL） */
+  /** 图片直链：海报预览层大图源与下载源（缺省时用 files[0] 现造 blob URL） */
   imageUrl?: string
 }
 

@@ -2,16 +2,17 @@
  * view.mjs — Action Sheet 视图模型（纯函数，node:test 覆盖）
  *
  * core 的 `listActions` 输出动作列表；本文件把它变成可渲染的视图数据：
- * sheet 项（含用户文案与主推荐标记）与按钮文案（多项 → 通用「分享」；唯一 → 直出动作名）。
+ * sheet 项（含用户文案与主推荐标记）与按钮文案（image 恒通用「分享」——点击先弹预览层；
+ * link / video 唯一动作时直出动作名）。
  *
  * 这里的标签是 UI 层的「方式名称」（描述这是什么方式），与 core copy 表的引导文案
  * （描述结果与位置）语义不同，故分开维护、互不污染。
  */
 
 /**
- * 动作在 Action Sheet 里的默认标签。
- * `save.album` 按产物区分动词（保存图片 / 保存视频）；`preview.longpress` 直说结果
- * 「长按保存海报」——用户点它就是想保存，不绕「查看大图」的弯子。
+ * 动作在方式列表里的默认标签。
+ * `save.album` 按产物区分动词（保存图片 / 保存视频）；`preview.longpress` 不再渲染为
+ * 按钮（预览层的大图本身可长按），标签保留仅维持续一的动作文案表完整性。
  */
 export const SHEET_LABELS = Object.freeze({
   'share.system': '系统分享',
@@ -41,12 +42,13 @@ export function sheetItemsOf(list, artifactKind, labels) {
 }
 
 /**
- * 按钮文案：唯一可用动作直出动作名（此时不弹列表、点击直接执行）；
- * 多个动作时给通用「分享」——具体方式由点击瞬间的列表决定，按钮不预示。
+ * 按钮文案：图片产物点击恒先弹海报预览层（图是基本操作，唯一动作也不直出执行），
+ * 一律给通用「分享」；link / video 产物保留「唯一动作直出动作名」（点击即执行，
+ * 此时按钮直说动作名才是准确的预期管理）。多项时通用「分享」，可被 labels.button 覆盖。
  */
 export function buttonLabelOf(list, artifactKind, labels) {
   const items = sheetItemsOf(list, artifactKind, labels)
-  if (items.length === 1) return items[0].label
+  if (artifactKind !== 'image' && items.length === 1) return items[0].label
   const custom = labels && labels.button
   return typeof custom === 'string' && custom.length > 0 ? custom : '分享'
 }
