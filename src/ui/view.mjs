@@ -15,7 +15,7 @@
  * 按钮（预览层的大图本身可长按），标签保留仅维持续一的动作文案表完整性。
  */
 export const SHEET_LABELS = Object.freeze({
-  'share.system': '系统分享',
+  'share.system': '分享',
   'save.album': '保存图片',
   'preview.longpress': '长按保存海报',
   'share.card.wx': '分享到微信',

@@ -196,8 +196,8 @@ const SCENARIOS = [
       await page.click('.share-kit-preview-btn[data-action="share.system"]')
       await page.waitForFunction(() => window.__shareCalled, null, { timeout: 10000 })
       const called = await page.evaluate(() => window.__shareCalled)
-      check('[Android Chrome] 层内选系统分享：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
-      check('[Android Chrome] 系统分享只传图不带 url（图是主体）', called && called.url === null, JSON.stringify(called && called.url))
+      check('[Android Chrome] 层内点「分享」：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
+      check('[Android Chrome] 分享只传图不带 url（图是主体）', called && called.url === null, JSON.stringify(called && called.url))
     },
   },
   {
