@@ -106,7 +106,10 @@ export function posterHtml(spec, options = {}) {
       `</div>`
 
   return (
-    `<div style="width:${s.size.w}px;height:${s.size.h}px;background:${esc(p.background)};box-sizing:border-box;padding:48px 44px;display:flex;flex-direction:column;font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;">` +
+    // 版式高度用 min-height：内容不足时保持版式高，超出时撑高——绝不裁内容。
+    // （固定 height 时 flex 子项 min-height:auto 不收缩，4 条 facts 即溢出 76px，
+    //  垫底的二维码被 html2canvas 裁掉半截、导出图扫不出码——jsQR 线上验收实证）
+    `<div style="width:${s.size.w}px;min-height:${s.size.h}px;background:${esc(p.background)};box-sizing:border-box;padding:48px 44px;display:flex;flex-direction:column;font-family:-apple-system,'PingFang SC','Helvetica Neue',sans-serif;">` +
     // L1 主色块：headline + subline
     `<div style="background:${esc(p.primary)};border-radius:20px;padding:32px 28px;">` +
     `<div style="font-size:44px;font-weight:800;color:${esc(p.onPrimary)};line-height:1.3;">${esc(c.headline || DEFAULT_HEADLINE)}</div>` +

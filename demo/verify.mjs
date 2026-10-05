@@ -41,12 +41,15 @@ try {
 
   const info = await page.evaluate(() => {
     const { canvas, spec } = window.__poster
-    // ② 二维码区真实像素：取右下角二维码区域（150×150 CSS），统计颜色种类
+    // ② 二维码区真实像素：码区位置从 DOM 实测取（海报 min-height 语义，可被内容撑高）
     const ctx = canvas.getContext('2d')
-    const scale = canvas.width / 750
-    const qrX = canvas.width - Math.round(166 * scale) // img 150 + padding 8×2
-    const qrY = canvas.height - Math.round(166 * scale)
-    const data = ctx.getImageData(qrX, qrY, Math.round(150 * scale), Math.round(150 * scale)).data
+    const poster = document.getElementById('poster-host').firstElementChild
+    const ir = poster.querySelector('img[alt="qrcode"]').getBoundingClientRect()
+    const pr = poster.getBoundingClientRect()
+    const scale = canvas.width / pr.width
+    const qrX = Math.round((ir.left - pr.left) * scale)
+    const qrY = Math.round((ir.top - pr.top) * scale)
+    const data = ctx.getImageData(qrX, qrY, Math.round(ir.width * scale), Math.round(ir.height * scale)).data
     const colors = new Set()
     for (let i = 0; i < data.length; i += 40) {
       colors.add(`${data[i] >> 4},${data[i + 1] >> 4},${data[i + 2] >> 4}`) // 粗量化，忽略压缩噪声
@@ -65,10 +68,13 @@ try {
     }
   })
 
-  // ① 尺寸：card 750×600，scaleFor(750,600,4.5MP)=3 → 2250×1800
-  const expectW = info.specW * 3
-  const expectH = info.specH * 3
-  check('canvas 尺寸符合 spec × 整数倍率', info.canvasW === expectW && info.canvasH === expectH, `${info.canvasW}×${info.canvasH}`)
+  // ① 尺寸：宽 = spec 宽 × 整数倍率；高 ≥ spec 高 × 同倍率（min-height 语义：内容撑高、绝不裁）
+  const scale = info.canvasW / info.specW
+  check(
+    'canvas 尺寸符合 spec × 整数倍率（高可撑）',
+    Number.isInteger(scale) && scale >= 2 && info.canvasH >= info.specH * scale,
+    `${info.canvasW}×${info.canvasH}（scale ${scale}，spec ${info.specW}×${info.specH}）`
+  )
   // ② 二维码区真实像素：黑白模块 → 量化颜色远多于 2 种
   check('二维码区有真实像素（非纯色）', info.qrColors > 2, `${info.qrColors} 种量化颜色`)
   // ③ 微信铁律：无 svg、无 relative / absolute

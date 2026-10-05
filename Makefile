@@ -1,4 +1,4 @@
-.PHONY: test lint typecheck demo-bundle demo-verify
+.PHONY: test lint typecheck demo-bundle demo-verify demo-verify-realworld
 
 # 跑全部测试（node:test，bun test 兼容）
 test:
@@ -19,3 +19,8 @@ demo-bundle:
 # Playwright 视觉验收（本地跑；依赖本机全局 playwright 与 chromium）
 demo-verify: demo-bundle
 	node demo/verify.mjs
+
+# 线上多 UA 全链路验收（七组真实 UA：微信 iOS/Android/桌面、小程序 webview、手机/桌面浏览器）
+# 断言环境识别 / 决策 / 长按引导 / 真下载 / 系统分享调用 / 复制 / 移动布局 / jsQR 二维码识读
+demo-verify-realworld:
+	node demo/verify-realworld.mjs

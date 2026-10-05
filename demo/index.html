@@ -82,7 +82,8 @@
 
     // ── 环境决策（页面加载即采集，按钮文案随决策变） ──────────────────────
     const signals = collectSignals()
-    const fingerprint = normalizeFingerprint(signals)
+    // normalizeFingerprint 返回 { fingerprint, signals } 包装——决策要传解构出的四维指纹
+    const { fingerprint } = normalizeFingerprint(signals)
     const plan = decideAction({ fingerprint, artifactKind: 'image', signals })
 
     const envCard = document.getElementById('env-card')
@@ -96,6 +97,9 @@
       ['决策动作 primary', plan.primary],
       ['reason', plan.reason],
     ].map(([k, v]) => `<div class="kv"><b>${k}</b><span class="mono">${v ?? 'null'}</span></div>`).join('')
+
+    // 供自动化验收读取（Playwright 多 UA 场景断言环境识别与决策）
+    window.__verifyEnv = { fingerprint, signals, plan }
 
     // 动作名 → 按钮文案（demo 简版；业务站用 core 文案表）
     const BTN_LABEL = { 'share.system': '系统分享海报', 'save.album': '下载 / 保存海报', 'copy.link': '复制链接', 'preview.longpress': '查看海报大图' }
@@ -153,8 +157,14 @@
       if (!plan || !exported) return
       btn.disabled = true
       btn.textContent = '执行中…'
+      // 点击瞬间重决策（同步纯函数，不烧激活）：一次性用户激活只在点击后才为 true，
+      // share.system 的信号闸必须在「这一刻」重算才能通过——首帧计划只用于按钮文案
+      const liveSignals = collectSignals()
+      const { fingerprint: liveFingerprint } = normalizeFingerprint(liveSignals)
+      const livePlan = decideAction({ fingerprint: liveFingerprint, artifactKind: 'image', signals: liveSignals })
+      window.__clickPlan = livePlan
       // executeAction 内部保证注入实现在同步段发出（R14 落点），这里直接调用即可
-      executeAction(plan.primary, deps).then((result) => {
+      executeAction(livePlan.primary, deps).then((result) => {
         btn.disabled = false
         if (result.ok) {
           btn.textContent = '已完成 · 可再试一次'
