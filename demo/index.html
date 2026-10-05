@@ -8,7 +8,9 @@
     body { font-family: -apple-system, 'PingFang SC', sans-serif; margin: 16px; background: #f5f6f8; color: #222; }
     h1 { font-size: 17px; }
     h2 { font-size: 14px; margin: 20px 0 8px; color: #555; }
-    #poster-host { width: 750px; max-width: 100%; overflow-x: auto; }
+    .intro { background: #e8f5ee; border: 1px solid #bfe5d2; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.7; color: #1a5c38; margin: 12px 0; }
+    /* 海报原稿 750px，capture 完成后 JS 等比缩到容器宽（一屏看全貌） */
+    #poster-host { width: 100%; overflow: hidden; }
     #result { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; display: none; }
     #status { color: #666; font-size: 13px; margin: 10px 0; }
     .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; font-size: 13px; line-height: 1.8; }
@@ -21,6 +23,11 @@
 </head>
 <body>
   <h1>share-kit 真机验证台（海报渲染 + 环境决策分享）</h1>
+  <div class="intro">
+    本页 = <b>业务站接入后的实际效果</b>：下面的海报 / 环境卡是业务页面自己的内容，
+    「③ 分享」区里那颗按钮就是接入的全部——SDK 只在挂载点插按钮、点击后弹浮层，
+    不改页面其余任何东西。接入方式与作用域声明见 <a href="https://github.com/everythingIsZero/share-kit#接入">README · 接入</a>。
+  </div>
   <div id="status">正在生成海报…</div>
 
   <!-- ① 海报区：posterHtml 注入，capture 抓取（Playwright 验收锚点，勿改名） -->
@@ -98,6 +105,18 @@
     }
 
     // ── 海报渲染链 ──────────────────────────────────────────────────────
+    // 海报 750px 原稿缩到容器宽（一屏看全貌）；缩放发生在 capture 之后，不影响渲染铁律
+    function fitPoster() {
+      const host = document.getElementById('poster-host')
+      const poster = host.firstElementChild
+      if (!poster) return
+      const scale = Math.min(1, host.clientWidth / poster.offsetWidth)
+      poster.style.transformOrigin = 'top left'
+      poster.style.transform = scale < 1 ? `scale(${scale})` : ''
+      host.style.height = scale < 1 ? `${Math.round(poster.offsetHeight * scale)}px` : ''
+    }
+    window.addEventListener('resize', fitPoster)
+
     async function render() {
       const spec = resolveSpec(input)
       const qrSrc = await qrDataUrl(spec.qr)
@@ -115,7 +134,8 @@
       const img = document.getElementById('result')
       img.src = exported.url
       img.style.display = 'block'
-      status.textContent = `海报完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}）`
+      status.textContent = `海报完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}，原稿 750px 已缩放适配屏幕）`
+      fitPoster()
 
       // 产物就绪后挂载 Action Sheet 形态分享（按钮 + sheet + 长按引导层 + 执行全在 SDK 内）
       window.__share = mountShare(document.getElementById('share-slot'), {

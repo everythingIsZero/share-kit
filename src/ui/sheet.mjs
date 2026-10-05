@@ -24,10 +24,11 @@ const CSS = `
 .share-kit-badge { font-size: 11px; line-height: 17px; padding: 0 5px; color: #07c160; border: 1px solid rgba(7,193,96,.4); border-radius: 4px; }
 .share-kit-sheet-cancel { display: block; width: calc(100% - 24px); margin: 4px auto 12px; min-height: 48px; border: 0; border-radius: 12px; background: #f7f7f8; font-size: 16px; font-weight: 500; color: #222; cursor: pointer; }
 .share-kit-sheet-cancel:active { background: #ededf0; }
-.share-kit-longpress { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.88); opacity: 0; transition: opacity .22s ease; }
+.share-kit-longpress { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.88); opacity: 0; transition: opacity .22s ease; padding: 16px; }
 .share-kit-longpress.share-kit-open { opacity: 1; }
-.share-kit-longpress img { max-width: 92vw; max-height: 72vh; }
+.share-kit-longpress img { max-width: 92vw; max-height: 68vh; }
 .share-kit-longpress-tip { color: #ffd970; font-size: 15px; }
+.share-kit-longpress-secondary { padding: 8px 22px; border: 1px solid rgba(255,255,255,.35); border-radius: 20px; background: none; color: #fff; font-size: 13px; cursor: pointer; }
 .share-kit-longpress-close { padding: 8px 22px; border: 1px solid #777; border-radius: 20px; background: none; color: #ccc; font-size: 13px; cursor: pointer; }
 .share-kit-tip { position: fixed; top: 0; left: 50%; transform: translate(-50%, -110%); z-index: 9992; margin-top: max(12px, env(safe-area-inset-top, 0px)); padding: 10px 16px; max-width: 86vw; border-radius: 10px; background: rgba(17,17,17,.92); color: #fff; font-size: 14px; line-height: 1.5; transition: transform .28s ease; }
 .share-kit-tip.share-kit-open { transform: translate(-50%, 0); }
@@ -127,8 +128,12 @@ export function showActionSheet({ title, items, onSelect }) {
   }).close
 }
 
-/** 长按引导层：全屏大图 + 「长按保存」提示（preview.longpress 的动作本体） */
-export function showLongpressOverlay({ imageUrl }) {
+/**
+ * 长按引导层：全屏大图 + 「长按保存」提示（preview.longpress 的动作本体）。
+ * `secondary` 可带一个次要方式（如「复制链接」）——主推荐直出引导层时，
+ * 次要方式不丢失，仍可从层内一键触达。
+ */
+export function showLongpressOverlay({ imageUrl, secondary }) {
   return createOverlay({
     build: (close) => {
       const panel = document.createElement('div')
@@ -142,12 +147,23 @@ export function showLongpressOverlay({ imageUrl }) {
       const tip = document.createElement('div')
       tip.className = 'share-kit-longpress-tip'
       tip.textContent = '长按上方图片，选择保存'
+      // 次要方式按钮（如复制链接）：点击即执行，引导层不关（用户可能还想长按）
+      if (secondary && typeof secondary.onSelect === 'function') {
+        const alt = document.createElement('button')
+        alt.type = 'button'
+        alt.className = 'share-kit-longpress-secondary'
+        alt.textContent = secondary.label || '复制链接'
+        alt.addEventListener('click', () => secondary.onSelect())
+        panel.append(img, tip, alt)
+      } else {
+        panel.append(img, tip)
+      }
       const btn = document.createElement('button')
       btn.type = 'button'
       btn.className = 'share-kit-longpress-close'
       btn.textContent = '关闭'
       btn.addEventListener('click', close)
-      panel.append(img, tip, btn)
+      panel.appendChild(btn)
       return panel
     },
   }).close

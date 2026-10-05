@@ -81,23 +81,25 @@ const SCENARIOS = [
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
     expect: { container: 'wechat', os: 'ios', engine: 'wkwebview', versionBand: 'ios-17', primary: 'preview.longpress', reason: 'primary-available', hint: 'non-null', firstList: 'preview.longpress,copy.link' },
     async interact(page) {
-      // 微信内：点击 → sheet 列真实可用方式 → 选「查看大图」→ 收 sheet 弹长按引导层（blob 大图）
-      const items = await openSheet(page)
-      checkSheet('微信iOS', items, [{ action: 'preview.longpress', primary: true }, { action: 'copy.link', primary: false }])
-      await page.click('.share-kit-sheet-item[data-action="preview.longpress"]')
+      // 微信内主推荐是长按保存（引导型）：不弹方式列表，直接弹大图长按引导层（最短路径）
+      await page.click('.share-kit-trigger', { timeout: 10000 })
       await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
-      const blob = await page.evaluate(() => document.querySelector('.share-kit-longpress img').src.startsWith('blob:'))
-      check('[微信iOS] 长按引导层展示 blob 大图', blob)
+      check('[微信iOS] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
+      check('[微信iOS] 长按引导层展示 blob 大图', await page.evaluate(() => document.querySelector('.share-kit-longpress img').src.startsWith('blob:')))
+      check('[微信iOS] 层内有「复制链接」次要方式', await page.evaluate(() => document.querySelector('.share-kit-longpress-secondary').textContent === '复制链接'))
       await page.click('.share-kit-longpress-close')
       // 关闭有 260ms 退场动画，等 DOM 真正移除
       await page.waitForFunction(() => !document.querySelector('.share-kit-longpress'), null, { timeout: 5000 })
       check('[微信iOS] 引导层可关闭', true)
-      // 移动布局：海报 750px 原尺寸横向滚动 + 导出图完整加载
-      const layout = await page.evaluate(() => ({
-        scrollable: document.getElementById('poster-host').scrollWidth > document.getElementById('poster-host').clientWidth,
-        imgLoaded: document.getElementById('result').complete && document.getElementById('result').naturalWidth > 0,
-      }))
-      check('[微信iOS] 海报横向滚动可用', layout.scrollable)
+      // 移动布局：海报 750px 原稿缩放到一屏全貌 + 导出图完整加载
+      const layout = await page.evaluate(() => {
+        const host = document.getElementById('poster-host')
+        return {
+          fitted: host.firstElementChild.getBoundingClientRect().width <= host.clientWidth + 1,
+          imgLoaded: document.getElementById('result').complete && document.getElementById('result').naturalWidth > 0,
+        }
+      })
+      check('[微信iOS] 海报缩放到一屏全貌', layout.fitted)
       check('[微信iOS] 导出图完整加载', layout.imgLoaded)
     },
   },
@@ -107,8 +109,10 @@ const SCENARIOS = [
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
     expect: { container: 'wechat', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', hint: 'non-null', firstList: 'preview.longpress,copy.link' },
     async interact(page) {
-      const items = await openSheet(page)
-      checkSheet('微信Android', items, [{ action: 'preview.longpress', primary: true }, { action: 'copy.link', primary: false }])
+      // 微信内直出冒烟：点击即弹大图长按引导层
+      await page.click('.share-kit-trigger', { timeout: 10000 })
+      await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
+      check('[微信Android] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
     },
   },
   {
@@ -157,8 +161,10 @@ const SCENARIOS = [
       navigator.canShare = () => false
     },
     async interact(page) {
-      const items = await openSheet(page)
-      checkSheet('iOS Safari', items, [{ action: 'preview.longpress', primary: true }, { action: 'copy.link', primary: false }])
+      // 无系统分享的 iOS 浏览器：主推荐也是长按保存 → 直出大图引导层
+      await page.click('.share-kit-trigger', { timeout: 10000 })
+      await page.waitForSelector('.share-kit-longpress img', { timeout: 10000 })
+      check('[iOS Safari] 主推荐长按：直接弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
     },
   },
   {

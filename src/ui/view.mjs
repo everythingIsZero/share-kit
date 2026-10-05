@@ -10,13 +10,13 @@
 
 /**
  * 动作在 Action Sheet 里的默认标签。
- * `save.album` 按产物区分动词（保存图片 / 保存视频）；`preview.longpress` 呈现为
- * 「查看大图」——点击后弹出长按引导层，引导层内才是真正的保存动作。
+ * `save.album` 按产物区分动词（保存图片 / 保存视频）；`preview.longpress` 直说结果
+ * 「长按保存海报」——用户点它就是想保存，不绕「查看大图」的弯子。
  */
 export const SHEET_LABELS = Object.freeze({
   'share.system': '系统分享',
   'save.album': '保存图片',
-  'preview.longpress': '查看大图',
+  'preview.longpress': '长按保存海报',
   'share.card.wx': '分享到微信',
   'share.card.miniapp': '小程序分享',
   'copy.link': '复制链接',

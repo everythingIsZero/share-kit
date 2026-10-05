@@ -21,7 +21,7 @@ test('sheetItemsOf：项数据带标签与主推荐标记，保持偏好序', ()
   assert.deepEqual(items.map((i) => i.id), ['share.system', 'preview.longpress', 'copy.link'])
   assert.deepEqual(
     items.map((i) => i.label),
-    ['系统分享', '查看大图', '复制链接']
+    ['系统分享', '长按保存海报', '复制链接']
   )
   assert.equal(items[0].isPrimary, true)
   assert.equal(items.filter((i) => i.isPrimary).length, 1)

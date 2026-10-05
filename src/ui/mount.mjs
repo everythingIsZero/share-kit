@@ -126,7 +126,7 @@ export function mountShare(target, options = {}) {
       if (result.mode === 'guidance') {
         if (result.action === 'preview.longpress') {
           const src = fileImageUrl(artifact)
-          if (src) overlayClose = showLongpressOverlay({ imageUrl: src })
+          if (src) overlayClose = showLongpressOverlay({ imageUrl: src, secondary: copySecondary() })
         } else {
           // share.card.wx / share.card.miniapp：卡片由宿主菜单转发，给一步引导提示
           showTipBar(renderCopy('card-wx-link'))
@@ -136,12 +136,28 @@ export function mountShare(target, options = {}) {
     })
   }
 
+  // 长按引导层内的次要方式（copy.link 无条件可用，恒可作次要项）
+  function copySecondary() {
+    return { label: '复制链接', onSelect: () => run('copy.link') }
+  }
+
   function handleClick() {
     if (disposed) return
     // 点击瞬间重决策（同步纯函数，不烧激活）：一次性用户激活只在此刻为 true
     const list = decideNow(collectSignals())
+    const primary = list.actions[0].id
+    // 主推荐是长按保存（引导型）：直接弹大图引导层，不弹方式列表——
+    // 长按层自带完整上下文（大图 + 长按提示），经 sheet 中转反而多一步；
+    // 次要方式（复制链接）收进层内，选择权不丢失
+    if (primary === 'preview.longpress') {
+      const src = fileImageUrl(artifact)
+      if (src) {
+        overlayClose = showLongpressOverlay({ imageUrl: src, secondary: copySecondary() })
+        return
+      }
+    }
     if (list.actions.length === 1) {
-      run(list.actions[0].id) // 唯一动作：不弹列表，同步段直接执行（R14）
+      run(primary) // 唯一动作：不弹列表，同步段直接执行（R14）
       return
     }
     overlayClose = showActionSheet({

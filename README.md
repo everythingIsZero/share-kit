@@ -76,7 +76,32 @@ bun add github:everythingIsZero/share-kit
 | `mountShare(target, { artifact, labels?, onResult? })` | 挂载分享按钮 + Action Sheet + 长按引导层 + 执行 + 反馈，返回 `{ unmount }` |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
-## 接入四步（与 demo/index.html 实际调用一致）
+## 接入
+
+### 先说清楚：SDK 会动你页面的哪里（作用域声明）
+
+接入的全部影响范围如下表——**除挂载点内部与触发后的浮层外，你的页面不会有任何变化**：
+
+| 时机 | 你的页面发生什么 | 明确不会发生什么 |
+|---|---|---|
+| 调用 `mountShare`（挂载） | ① 挂载点 `target` 末尾插入 1 个分享按钮（`button.share-kit-trigger`）；② `head` 插入 1 份样式表（id=`share-kit-ui-style`，幂等，全页仅一份） | 不改页面任何已有 DOM 与样式；不挂 `window` 全局变量；不监听全局事件 |
+| 用户点击分享按钮 | 按环境走最短路径：微信内**直接弹大图长按引导层**；有多个可用方式弹底部 Action Sheet；仅剩唯一方式不弹直接执行。浮层插在 `body` 末尾（fixed + 高 z-index），关闭后约 260ms 自动从 DOM 移除 | 不跳页不刷新；浮层用的图是你传入的本地 blob，不发网络请求 |
+| 用户选定方式后 | 按方式执行：系统分享面板 / `a[download]` 下载 / 剪贴板复制（失败自动落 execCommand）；结果反馈写在**按钮文案**上 | 不用 toast 弹窗；SDK 不发任何统计请求（埋点走你传入的 `onResult`） |
+| `unmount()`（卸载） | 按钮移除、事件解绑、浮层收起 | 页面其余部分与你接入前完全一致 |
+
+海报生成与 SDK 的边界：**SDK 不管海报怎么来**——你的页面用 `render-dom`（或任何方式）产出
+blob / File，填进 `artifact`。`artifact` 是执行时取值的引用：可以先挂载（页面加载即有按钮），
+产物就绪后再补 `files` / `imageUrl`。
+
+### 谁在什么场景接（Use Cases）
+
+| 你的页面 | artifact 传什么 | 微信内用户看到 | 浏览器用户看到 |
+|---|---|---|---|
+| 车型报价 / 商品页（分享海报） | `kind:'image'` + `files:[海报File]` + `imageUrl` | 点「分享海报」→ 直接弹大图 → 长按保存（「复制链接」在层内） | 点「分享海报」→ 弹方式列表：系统分享 / 长按保存海报 / 复制链接 |
+| 内容页（文章 / 攻略，分享链接） | `kind:'link'` + `url` | 弹方式列表：分享到微信（卡片）/ 复制链接 | 系统分享链接 / 复制链接 |
+| 视频页 | `kind:'video'` + `files:[视频File]` | 微信内视频无前端保存路径 → 复制链接 | 系统分享 / 保存 |
+
+### 接入代码（与 demo/index.html 实际调用一致）
 
 ```js
 import { resolveSpec } from 'share-kit/poster'                                  // poster
@@ -90,8 +115,7 @@ host.innerHTML = posterHtml(spec, { qrDataUrl: qrSrc })
 const canvas = await capture(host.firstElementChild)
 const exported = await exportPng(canvas)
 
-// 2. 挂载分享：把「想分享的东西」交给 mountShare，按钮 + Action Sheet + 执行 + 反馈全在 SDK 内
-//    （artifact 是执行时取值的可变引用：先挂载、渲染完成后再补 files / imageUrl 即可）
+// 2. 挂载分享：你的页面从此只多一个按钮（+点击后的浮层），其余零影响
 const artifact = { kind: 'image', url: pageUrl, title: '…', text: '…' }
 mountShare(document.getElementById('share-slot'), {
   artifact,
