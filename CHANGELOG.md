@@ -4,6 +4,27 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-05
+
+### Added
+
+- `ui` 入口 `mountShare`：业务站把 artifact 传入即得分享按钮与全部后续交互（view 纯函数 + sheet DOM 薄壳 + mount 主流程）。
+- core `listActions`：与 `decideAction` 共享过滤单源的完整可用动作列表（点击瞬间重算，绕开首帧激活信号闸）。
+- 线上多 UA 验收链路（七组真实 UA：微信 iOS/Android/桌面、小程序 webview、手机/桌面浏览器）。
+
+### Changed
+
+- **红线 2 落地（出资人拍板）**：图片产物点击分享先弹**海报预览层**（全屏大图 + 长按提示 + 层内方式按钮行，主推荐高亮），无图可显才弹 Action Sheet 兜底；「点击弹方式列表」口径作废。
+- `share.system` 传参：有 `files` 只传图不带 `url`（iOS 混传把链接当主体）。
+- 用户取消（AbortError）静默复原按钮，不再误报「没完成」。
+- 层内 `share.system` 标签「系统分享」→「分享」（业务站可 `labels.actions` 覆盖）。
+
+### Fixed
+
+- 信号闸按产物区分：新增 `hasShare` 信号（存在性），`canShareFiles===false` 只闸 image/video——修复桌面 Chrome link 分享被过杀。
+- 小程序 webview 凭 `a[download]` 信号承诺必失败下载的问题：能力表文档级 `available:false` 不被特性探测推翻。
+- render-dom 版式高度改 `min-height`：固定 height 时 flex 撑溢导致二维码被裁、导出图扫码失败。
+
 ## [0.1.0] - 2026-10-05
 
 ### Added
