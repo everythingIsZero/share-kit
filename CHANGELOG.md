@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-05
+
 ### Added
 
 - 仓初始化（scaffold）：单包多入口 exports map（core / web / poster / render-dom）。
