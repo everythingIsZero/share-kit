@@ -3,69 +3,177 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>share-kit render-dom demo</title>
+  <title>share-kit 真机验证台</title>
   <style>
-    body { font-family: -apple-system, 'PingFang SC', sans-serif; margin: 24px; background: #f5f6f8; }
-    h1 { font-size: 18px; }
-    #poster-host { width: 750px; overflow-x: auto; }
-    #result { max-width: 375px; border: 1px solid #ddd; border-radius: 8px; display: none; }
-    #status { color: #666; font-size: 13px; margin: 12px 0; }
+    body { font-family: -apple-system, 'PingFang SC', sans-serif; margin: 16px; background: #f5f6f8; color: #222; }
+    h1 { font-size: 17px; }
+    h2 { font-size: 14px; margin: 20px 0 8px; color: #555; }
+    #poster-host { width: 750px; max-width: 100%; overflow-x: auto; }
+    #result { max-width: 100%; border: 1px solid #ddd; border-radius: 8px; display: none; }
+    #status { color: #666; font-size: 13px; margin: 10px 0; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; font-size: 13px; line-height: 1.8; }
+    .kv { display: flex; justify-content: space-between; gap: 12px; }
+    .kv b { font-weight: 600; color: #444; flex-shrink: 0; }
+    .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    #share-btn { width: 100%; padding: 12px; font-size: 15px; border: 0; border-radius: 10px; background: #1a7f37; color: #fff; margin-top: 10px; }
+    #share-btn:disabled { background: #9ca3af; }
+    #plan-hint { color: #8a6d1a; background: #fff7e0; border-radius: 6px; padding: 6px 8px; margin-top: 8px; font-size: 12px; display: none; }
+    /* 长按引导层（微信内 preview.longpress 的 guidance UI）：遮罩 + 大图 + 提示 */
+    #longpress-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 99; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+    #longpress-overlay img { max-width: 92vw; max-height: 74vh; }
+    #longpress-overlay .tip { color: #ffd970; font-size: 15px; }
+    #longpress-overlay .close { color: #bbb; font-size: 13px; padding: 8px 20px; border: 1px solid #777; border-radius: 20px; }
   </style>
 </head>
 <body>
-  <h1>share-kit render-dom demo（750×600 card / outdoor 主题）</h1>
+  <h1>share-kit 真机验证台（海报渲染 + 环境决策分享）</h1>
   <div id="status">正在生成海报…</div>
-  <!-- 海报宿主：posterHtml 注入，capture 抓取 -->
+
+  <!-- ① 海报区：posterHtml 注入，capture 抓取（Playwright 验收锚点，勿改名） -->
+  <h2>① 海报渲染（zbh 车销场景样例）</h2>
   <div id="poster-host"></div>
-  <!-- 导出产物展示 -->
   <img id="result" alt="海报导出结果" />
 
+  <!-- ② 环境识别：fingerprint + 运行时信号（真机验证时截图回填能力表用） -->
+  <h2>② 环境识别（真机验证请截图这一卡）</h2>
+  <div class="card" id="env-card">采集中…</div>
+
+  <!-- ③ 分享操作：一环境一动作，按钮恒直出 -->
+  <h2>③ 分享 / 保存（决策 + 执行）</h2>
+  <button id="share-btn" disabled>决策中…</button>
+  <div id="plan-hint"></div>
+
+  <!-- 微信内长按引导层：preview.longpress 的 guidance UI -->
+  <div id="longpress-overlay">
+    <img id="overlay-img" alt="长按保存海报" />
+    <div class="tip">长按上方图片，选择「保存图片」</div>
+    <button class="close" id="overlay-close">关闭</button>
+  </div>
+
   <script type="module">
-    // poster 入口零依赖纯 ESM，直接引源码；render-dom 带 CJS 依赖（qrcode），走打包产物
+    // poster / core / web 三入口零依赖纯 ESM，直接引源码；render-dom 带 CJS 依赖（qrcode），走打包产物
     import { resolveSpec } from '../src/poster/index.mjs'
+    import { normalizeFingerprint, decideAction } from '../src/core/index.mjs'
+    import { collectSignals, executeAction } from '../src/web/index.mjs'
     import { qrDataUrl, posterHtml, capture, exportPng } from './render-dom.bundle.mjs'
 
-    // 样例业务输入（模拟业务站数据）
+    // 样例业务输入（zbh 车销报价场景，模拟业务站数据）
     const input = {
       format: 'card',
-      themeId: 'outdoor',
+      themeId: 'celebration',
       content: {
-        headline: '周末爬山局',
-        subline: '新增 3 个地点，全员成行',
+        headline: '2025款 轩逸·经典版',
+        subline: '限时一口价 · 综合优惠 2.3 万',
         facts: [
-          { label: '时间', value: '周六 09:00' },
-          { label: '集合点', value: '北高峰南门' },
-          { label: '强度', value: '初级 · 4 小时' },
+          { label: '裸车价', value: '¥7.98万起' },
+          { label: '首付', value: '¥2.4万' },
+          { label: '月供', value: '¥1,688 × 36期' },
+          { label: '落地总价', value: '¥8.86万' },
         ],
-        owner: '阿强',
-        cta: '长按识别二维码 · 报名',
+        owner: '桂林懂车弟 · 陈顾问',
+        cta: '长按识别二维码 · 获取最新报价',
       },
       qr: { url: 'https://share.hxym18.com/s/demo001' },
     }
 
     const status = document.getElementById('status')
+    const btn = document.getElementById('share-btn')
+    const hintBox = document.getElementById('plan-hint')
+
+    // ── 环境决策（页面加载即采集，按钮文案随决策变） ──────────────────────
+    const signals = collectSignals()
+    const fingerprint = normalizeFingerprint(signals)
+    const plan = decideAction({ fingerprint, artifactKind: 'image', signals })
+
+    const envCard = document.getElementById('env-card')
+    envCard.innerHTML = [
+      ['容器 container', fingerprint.container],
+      ['系统 os', fingerprint.os],
+      ['引擎 engine', fingerprint.engine],
+      ['版本带 versionBand', fingerprint.versionBand],
+      ['canShareFiles', String(signals.canShareFiles)],
+      ['hasDownloadAttr', String(signals.hasDownloadAttr)],
+      ['决策动作 primary', plan.primary],
+      ['reason', plan.reason],
+    ].map(([k, v]) => `<div class="kv"><b>${k}</b><span class="mono">${v ?? 'null'}</span></div>`).join('')
+
+    // 动作名 → 按钮文案（demo 简版；业务站用 core 文案表）
+    const BTN_LABEL = { 'share.system': '系统分享海报', 'save.album': '下载 / 保存海报', 'copy.link': '复制链接', 'preview.longpress': '查看海报大图' }
+    btn.textContent = BTN_LABEL[plan.primary] || `执行 ${plan.primary}`
+    if (plan.hint) { hintBox.textContent = `操作说明：${plan.hint}`; hintBox.style.display = 'block' }
+
+    // ── 海报渲染链 ──────────────────────────────────────────────────────
+    let exported = null
+    let posterFile = null // 渲染完成即预构造 File（点击回调同步段直接可用，R14）
 
     async function render() {
-      // 1. 业务数据 → 冻结快照
       const spec = resolveSpec(input)
-      // 2. 二维码 512px 高倍源图
       const qrSrc = await qrDataUrl(spec.qr)
-      // 3. 快照 → 海报 HTML → 注入宿主
       const html = posterHtml(spec, { qrDataUrl: qrSrc })
       const host = document.getElementById('poster-host')
       host.innerHTML = html
-      // 4. DOM → canvas（scale 预算 + 两档降级）
       const canvas = await capture(host.firstElementChild)
       if (!canvas) throw new Error('海报画布两档预算均失败')
-      // 5. 导出（blob URL 优先）
-      const exported = await exportPng(canvas)
+      exported = await exportPng(canvas)
+      // 预构造 File：blob 分支直接包；data-url 分支 fetch 转 blob（都在点击前完成）
+      const blob = exported.blob ?? (await (await fetch(exported.url)).blob())
+      posterFile = new File([blob], 'share-kit-poster.png', { type: 'image/png' })
+
       const img = document.getElementById('result')
       img.src = exported.url
       img.style.display = 'block'
-      status.textContent = `完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}）`
-      // 供 Playwright 验收断言
+      status.textContent = `海报完成：${canvas.width}×${canvas.height}（导出 ${exported.kind}）`
+      btn.disabled = false
+      // 供 Playwright 验收断言（契约：canvas / spec / exported）
       window.__poster = { canvas, spec, exported }
     }
+
+    // ── 分享执行链（R14：点击回调同步段发起，await 只在其后） ─────────────
+    const deps = {
+      // 系统分享面板（share.system）
+      share: (payload) => navigator.share(payload),
+      // 直接下载（save.album / 信号兜底）
+      download: ({ url, filename }) => {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename || 'share-kit-poster.png'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      },
+      // 兜底复制（copy.link）
+      copy: (text) => navigator.clipboard.writeText(text),
+      url: location.href,
+      title: input.content.headline,
+      text: input.content.subline,
+      get files() { return posterFile ? [posterFile] : undefined },
+    }
+
+    btn.addEventListener('click', () => {
+      if (!plan || !exported) return
+      btn.disabled = true
+      btn.textContent = '执行中…'
+      // executeAction 内部保证注入实现在同步段发出（R14 落点），这里直接调用即可
+      executeAction(plan.primary, deps).then((result) => {
+        btn.disabled = false
+        if (result.ok) {
+          btn.textContent = '已完成 · 可再试一次'
+        } else {
+          btn.textContent = `失败（${result.outcome}）· 点此重试`
+        }
+        // 微信内引导类动作：展示长按大图层
+        if (result.mode === 'guidance' && result.action === 'preview.longpress') {
+          document.getElementById('overlay-img').src = exported.url
+          document.getElementById('longpress-overlay').style.display = 'flex'
+        }
+        // 暴露给真机验证记录（微信 vConsole / 远程调试可读）
+        window.__lastResult = result
+      })
+    })
+
+    document.getElementById('overlay-close').addEventListener('click', () => {
+      document.getElementById('longpress-overlay').style.display = 'none'
+    })
 
     render().catch((err) => {
       status.textContent = `失败：${err && err.message ? err.message : err}`
