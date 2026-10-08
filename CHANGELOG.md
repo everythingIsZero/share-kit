@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-08
+
+### Added
+
+- `typesVersions`：兼容经典 `moduleResolution: node` 的子路径（`web` / `web/react` / `poster` / `render-dom` / `ui`）类型解析。
+
 ## [0.2.0] - 2026-10-05
 
 ### Added

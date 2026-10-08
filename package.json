@@ -1,6 +1,6 @@
 {
   "name": "@hxym18/share-kit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "跨终端分享 SDK：环境决策（core）+ 浏览器适配（web）+ 海报配置（poster）+ DOM 渲染（render-dom）",
   "type": "module",
   "license": "MIT",
@@ -45,6 +45,15 @@
       "default": "./src/web/react.mjs"
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "web": ["src/web/index.d.ts"],
+      "web/react": ["src/web/react.d.ts"],
+      "poster": ["src/poster/index.d.ts"],
+      "render-dom": ["src/render-dom/index.d.ts"],
+      "ui": ["src/ui/index.d.ts"]
+    }
   },
   "scripts": {
     "test": "node --test 'test/**/*.test.mjs'"
