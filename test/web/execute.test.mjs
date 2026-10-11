@@ -126,3 +126,38 @@ test('save.album 无文件源时给空串，绝不回退到 url（页面 HTML）
   await executeAction('save.album', { url: 'https://page/private?token=x', download: (a) => seen.push(a) })
   assert.equal(seen[0].url, '', '无文件源不得拿页面 url 顶替')
 })
+
+test('copy.link 空 url 稳健：execute 传空串而非 undefined（不得复制出字面量 "undefined"）', async () => {
+  let seen = 'SENTINEL'
+  await executeAction('copy.link', { copy: (t) => { seen = t } })
+  assert.equal(seen, '', '缺 url 时注入实现应收到空串，而不是 undefined')
+})
+
+test('save.album 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', async () => {
+  const revoked = []
+  const orig = URL.revokeObjectURL
+  URL.revokeObjectURL = (u) => revoked.push(u)
+  try {
+    const blob = new Blob(['x'], { type: 'image/png' })
+    const seen = []
+    await executeAction('save.album', { files: [blob], filename: 'p.png', download: (a) => seen.push(a) })
+    await new Promise((r) => setTimeout(r, 5))
+    assert.ok(seen[0].url.startsWith('blob:'), '下载源应是现造的 blob URL')
+    assert.deepEqual(revoked, [seen[0].url], '现造的对象 URL 应在用毕后释放')
+  } finally {
+    URL.revokeObjectURL = orig
+  }
+})
+
+test('save.album 用 fileUrl 时不释放对象 URL（所有权归调用方）', async () => {
+  const revoked = []
+  const orig = URL.revokeObjectURL
+  URL.revokeObjectURL = (u) => revoked.push(u)
+  try {
+    await executeAction('save.album', { fileUrl: 'blob:file', download: () => {} })
+    await new Promise((r) => setTimeout(r, 5))
+    assert.deepEqual(revoked, [], '调用方给的 fileUrl 不得由本包释放')
+  } finally {
+    URL.revokeObjectURL = orig
+  }
+})

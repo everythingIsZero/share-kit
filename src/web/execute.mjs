@@ -23,6 +23,21 @@ export const ACTION_DEP_MAP = Object.freeze({
 /** 引导类动作：由界面给出一步引导，不调用任何外部实现 */
 export const GUIDANCE_ACTIONS = Object.freeze(['preview.longpress', 'share.card.wx', 'share.card.miniapp'])
 
+/**
+ * 释放现造的对象 URL（`URL.createObjectURL` 的产物）。
+ * 只回收 `blob:` 开头的自造 URL，不碰调用方给的 `fileUrl`（其所有权归调用方）。
+ * 延后一个宏任务再 revoke：`a[download]` 的下载在 click 后才真正开始，个别浏览器立即 revoke 会中断下载。
+ */
+function revokeBlobUrlLater(url) {
+  if (typeof url !== 'string' || !url.startsWith('blob:')) return
+  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') return
+  // 捕获函数本身（而非延迟读全局），避免测试替换 URL.revokeObjectURL 时串台
+  const revokeFn = URL.revokeObjectURL.bind(URL)
+  const revoke = () => revokeFn(url)
+  if (typeof setTimeout === 'function') setTimeout(revoke, 0)
+  else revoke()
+}
+
 /** 调用注入实现（**同步段**：这里绝不能出现 await） */
 function invoke(actionId, deps) {
   const depKey = ACTION_DEP_MAP[actionId]
@@ -39,9 +54,13 @@ function invoke(actionId, deps) {
     // S3：下载源是**文件**（files[0] → fileUrl），绝不拿页面 url 顶替——否则下到的是页面 HTML。
     const file = deps.files && deps.files[0]
     const url = file ? URL.createObjectURL(file) : deps.fileUrl || ''
-    return fn({ url, filename: deps.filename })
+    const pending = fn({ url, filename: deps.filename })
+    // 释放：a[download] 已由同步段发起，现造的对象 URL 用毕即回收（约定同 render-dom/export.mjs），
+    // 延后一个宏任务，避免个别浏览器在 click 后立刻 revoke 会中断下载。
+    if (file) revokeBlobUrlLater(url)
+    return pending
   }
-  return fn(deps.url)
+  return fn(deps.url || '')
 }
 
 /** 结果归一：错误一律转成四类结果之一，不向上抛 */

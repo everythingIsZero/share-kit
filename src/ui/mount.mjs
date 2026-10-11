@@ -20,7 +20,7 @@ import { collectSignals, executeAction } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
 
-/** 直接下载（save.album）：a[download] 点击（落点由环境决定——手机进相册/下载，桌面进下载目录） */
+/** 直接下载（save.album）：a[download] 点击（落点由环境决定——手机落「本机文件」/下载，桌面进下载目录；非相册） */
 function defaultDownload({ url, filename }) {
   const a = document.createElement('a')
   a.href = url
@@ -32,6 +32,8 @@ function defaultDownload({ url, filename }) {
 
 /** 复制链接：clipboard API 优先，静默失败（微信内常见）落 execCommand 兜底 */
 async function defaultCopy(text) {
+  // 空值稳健：没有可复制的公开链时静默返回——绝不把 undefined 强转成字面量 "undefined" 复制出去
+  if (typeof text !== 'string' || text.length === 0) return
   if (navigator.clipboard && navigator.clipboard.writeText) {
     try {
       await navigator.clipboard.writeText(text)
@@ -84,8 +86,8 @@ export function mountShare(target, options = {}) {
     download: defaultDownload,
     copy: defaultCopy,
     // S3：url 只作公开分享链，**不再 `|| location.href`**——页面地址可能是私有页（带 token），
-    // 落到复制/系统分享即外泄；缺 url 时宁可给空，也不拿当前页顶替。
-    url: artifact.url,
+    // 落到复制/系统分享即外泄；缺 url 时给空串（绝不 undefined，避免被强转成字面量 "undefined" 复制出去）。
+    url: artifact.url || '',
     title: artifact.title,
     text: artifact.text,
     filename: artifact.filename,

@@ -16,8 +16,8 @@ export interface ExecuteDeps {
   share?: (payload: { files?: unknown; url?: string; title?: string; text?: string }) => unknown
   /** 复制链接 */
   copy?: (text: string) => unknown
-  /** 直接下载 */
-  download?: (payload: { url?: string; files?: unknown; filename?: string }) => unknown
+  /** 直接下载（save.album）：url 为文件源（files[0] 现造 blob 或 fileUrl），不含页面地址 */
+  download?: (payload: { url?: string; filename?: string }) => unknown
   /**
    * 「去外部浏览器」引导按钮的注入点。本函数**不会自动调用它**——
    * 自动跳浏览器会打断用户，是否提供这一步由调用方接线。

@@ -140,13 +140,14 @@ test('mount：deps.url 只取 artifact.url（有 url 时复制到的是分享链
   handle.unmount()
 })
 
-test('mount：artifact 无 url 时不回退 location.href（S3 移除回退）', async () => {
+test('mount：artifact 无 url 时不回退 location.href，也不复制字面量 "undefined"', async () => {
   copied = null
   const target = makeEl('div')
   const handle = mountShare(target, { artifact: { kind: 'link' } })
   fire(target.children[0], 'click')
   await tick()
   assert.notEqual(copied, PAGE_URL, '缺 url 不得拿 location.href 顶替')
+  assert.notEqual(copied, 'undefined', '缺 url 不得把 undefined 强转成字面量复制出去')
   handle.unmount()
 })
 
