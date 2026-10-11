@@ -74,6 +74,36 @@ export const GUIDANCE_COPY_ID = Object.freeze({
   'preview.longpress': 'longpress-image',
 })
 
+/** 敏感 query 键：出现即判非公开（私有页常带 token 之类，绝不能被复制/分享出去） */
+export const SENSITIVE_QUERY_KEYS = Object.freeze(['token', 't', 'access_token'])
+
+/** 默认公开分享域（业务可用 mountShare 的 `publicHosts` 覆盖为站点声明的公开域） */
+export const DEFAULT_PUBLIC_HOSTS = Object.freeze(['share.hxym18.com'])
+
+/**
+ * 判一个 URL 是否**公开分享链**（S3）。仅当同时满足：host 在允许域内、且不含敏感 query。
+ * 私有页 / 带 token / 非允许域 / 非法 URL / 空串一律 false——分享与复制只允许公开链，
+ * 页面地址（`location.href` 之类）天然不满足，从而杜绝私有页外泄。
+ *
+ * @param url         待判 URL
+ * @param publicHosts 站点声明的公开域列表（缺省用 DEFAULT_PUBLIC_HOSTS）
+ */
+export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
+  if (typeof url !== 'string' || url.length === 0) return false
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  const hosts = Array.isArray(publicHosts) && publicHosts.length > 0 ? publicHosts : DEFAULT_PUBLIC_HOSTS
+  if (!hosts.includes(parsed.hostname)) return false
+  for (const key of parsed.searchParams.keys()) {
+    if (SENSITIVE_QUERY_KEYS.includes(key.toLowerCase())) return false
+  }
+  return true
+}
+
 /**
  * 挂载分享按钮。
  *
@@ -82,14 +112,15 @@ export const GUIDANCE_COPY_ID = Object.freeze({
  *   - `artifact`：`{ kind: 'image'|'video'|'link', url?, title?, text?, files?, filename?, imageUrl? }`。
  *     是**执行时取值**的可变引用——先挂载、渲染完成后再补 `files` / `imageUrl` 即可；
  *   - `labels`：`{ button?, sheetTitle?, actions?: { <动作id>: 覆盖文案 } }`；
- *   - `onResult(result)`：每次执行后回调（`{ ok, outcome, action, mode }`），供业务埋点上报。
+ *   - `onResult(result)`：每次执行后回调（`{ ok, outcome, action, mode }`），供业务埋点上报；
+ *   - `publicHosts`：站点声明的公开分享域（缺省 `share.hxym18.com`）；非公开链会被拒绝复制/分享。
  * @returns `{ unmount }`
  */
 export function mountShare(target, options = {}) {
   if (!target || typeof target.appendChild !== 'function') {
     throw new TypeError('mountShare(target, options)：target 必须是可挂载的 DOM 节点')
   }
-  const { artifact = {}, labels, onResult } = options
+  const { artifact = {}, labels, onResult, publicHosts } = options
   const kind = artifact.kind
 
   const deps = {
@@ -148,7 +179,21 @@ export function mountShare(target, options = {}) {
     return '已完成 · 可再试一次'
   }
 
+  /** 该动作是否会用到**分享链**（url）；share.system 有文件时用文件、不用 url */
+  function usesShareUrl(actionId) {
+    if (actionId === 'share.system') return !(deps.files && deps.files.length > 0)
+    return actionId === 'copy.link' || actionId === 'share.card.wx' || actionId === 'share.card.miniapp'
+  }
+
   function run(actionId) {
+    // S3：非公开链（私有页 / 带 token）不得复制或分享出去——拒绝执行并如实反馈，绝不静默外泄
+    if (usesShareUrl(actionId) && !isPublicShareUrl(deps.url, publicHosts)) {
+      const text = renderCopy('fail-private-url')
+      setLabel(text)
+      showTipBar(text)
+      if (typeof onResult === 'function') onResult({ ok: false, outcome: 'blocked', action: actionId, mode: 'invoked' })
+      return
+    }
     setLabel('正在处理…')
     Promise.resolve(executeAction(actionId, deps)).then((result) => {
       if (disposed) return

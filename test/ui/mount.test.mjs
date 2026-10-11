@@ -7,7 +7,7 @@
  *   - `save.album` 下载走文件源（`files[0]` → `fileUrl`），**不下载页面 HTML**。
  */
 
-import { test } from 'node:test'
+import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 // ---------------------------------------------------------------------------
@@ -126,10 +126,18 @@ Object.defineProperty(globalThis, 'location', { value: { href: PAGE_URL }, confi
 globalThis.document = documentStub
 globalThis.requestAnimationFrame = (cb) => cb()
 
-const { mountShare, GUIDANCE_COPY_ID } = await import('../../src/ui/mount.mjs')
+const { mountShare, GUIDANCE_COPY_ID, isPublicShareUrl } = await import('../../src/ui/mount.mjs')
 const { renderCopy } = await import('../../src/core/index.mjs')
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
+
+// 每个用例前清空 body（浮层/tip 的 setTimeout 移除在测试里不会触发，避免跨用例串台）
+beforeEach(() => {
+  documentStub.body.children = []
+  copied = null
+  downloaded.length = 0
+})
+
 const setUA = (ua) => {
   globalThis.navigator.userAgent = ua
 }
@@ -226,4 +234,55 @@ test('tip 按动作选文案：wx / miniapp 各用各自 copy，不恒用 card-w
   for (const id of Object.values(GUIDANCE_COPY_ID)) {
     assert.ok(renderCopy(id).length > 0, `${id} 必须有正文`)
   }
+})
+
+test('isPublicShareUrl：公开短链 true；私有页 / 敏感 query / 非允许域 / 非法一律 false', () => {
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/app/1'), true)
+  // 敏感 query：token / t / access_token
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/app/1?token=abc'), false)
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/app/1?t=abc'), false)
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/app/1?access_token=abc'), false)
+  // 私有 host（带 token 的私有页）
+  assert.equal(isPublicShareUrl('https://fang.hxym18.com/ledger?token=abc'), false)
+  // 非允许域（即使无 token 也不算公开分享链）
+  assert.equal(isPublicShareUrl('https://fang.hxym18.com/ledger'), false)
+  // 空 / 非法
+  assert.equal(isPublicShareUrl(''), false)
+  assert.equal(isPublicShareUrl(undefined), false)
+  assert.equal(isPublicShareUrl('not a url'), false)
+  // 站点声明公开域（参数）
+  assert.equal(isPublicShareUrl('https://cdn.example.com/s/1', ['cdn.example.com']), true)
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1', ['cdn.example.com']), false)
+})
+
+test('mount：非公开链（私有页 / token）不复制、不分享，给如实反馈（不静默）', async () => {
+  setUA('')
+  copied = null
+  const results = []
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://fang.hxym18.com/ledger?token=secret' },
+    onResult: (r) => results.push(r),
+  })
+  fire(target.children[0], 'click')
+  await tick()
+  assert.equal(copied, null, '私有页 URL 绝不能被复制')
+  assert.notEqual(target.children[0].textContent, '链接已复制', '不得报复制成功')
+  assert.equal(target.children[0].textContent, renderCopy('fail-private-url'), '应给如实反馈')
+  assert.equal(results.length, 1, '拒绝也要回报结果，不静默')
+  assert.equal(results[0].ok, false)
+  assert.equal(results[0].outcome, 'blocked')
+  assert.equal(results[0].action, 'copy.link')
+  handle.unmount()
+})
+
+test('mount：公开短链照常复制（校验不误伤合法分享链）', async () => {
+  setUA('')
+  copied = null
+  const target = makeEl('div')
+  const handle = mountShare(target, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/app/ok' } })
+  fire(target.children[0], 'click')
+  await tick()
+  assert.equal(copied, 'https://share.hxym18.com/s/app/ok')
+  handle.unmount()
 })

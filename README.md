@@ -33,7 +33,7 @@ bun add github:everythingIsZero/share-kit
 | `listActions({ fingerprint, artifactKind, signals })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序） |
 | `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 六动作，带证据等级） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
-| `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果四分类（成功/取消/阻断/失败）与反馈计划 |
+| `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果分类（成功 / 取消 / 阻断 / 失败 / **引导**）与反馈计划 |
 | `buildEvent(input)` | 事件对象（固定四字段，UA 原文与身份字段不进事件） |
 
 ### `share-kit/poster`（海报配置）
@@ -73,7 +73,8 @@ bun add github:everythingIsZero/share-kit
 
 | 导出 | 说明 |
 |---|---|
-| `mountShare(target, { artifact, labels?, onResult? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
+| `mountShare(target, { artifact, labels?, onResult?, publicHosts? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
+| `isPublicShareUrl(url, publicHosts?)` | 判 URL 是否**公开分享链**（host 在公开域内 + 无 `token`/`t`/`access_token` 类 query）；私有页一律 false |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
 ## 接入
@@ -116,7 +117,8 @@ const canvas = await capture(host.firstElementChild)
 const exported = await exportPng(canvas)
 
 // 2. 挂载分享：你的页面从此只多一个按钮（+点击后的浮层），其余零影响
-const artifact = { kind: 'image', url: pageUrl, title: '…', text: '…' }
+//    分享链必须是公开链（share.hxym18.com/s/<shareId>）；私有页地址（带 token）会被拒绝复制/分享。
+const artifact = { kind: 'image', url: 'https://share.hxym18.com/s/abc123', title: '…', text: '…' }
 mountShare(document.getElementById('share-slot'), {
   artifact,
   labels: { button: '分享海报', sheetTitle: '分享这张海报' },
@@ -130,9 +132,29 @@ artifact.imageUrl = exported.url
 // 4. 分享链接统一 share.hxym18.com/s/<shareId>（复制链接 / 卡片 / 海报二维码同源）
 ```
 
+> **分享链校验（S3）**：`mountShare` 只把**公开分享链**交给复制 / 系统分享 / 卡片。
+> 判断口径是 `isPublicShareUrl(url, publicHosts?)`——host 必须在公开域内（默认 `share.hxym18.com`，
+> 站点可用 `publicHosts` 声明自己的公开域），且不含 `token` / `t` / `access_token` 类敏感 query。
+> 命中非公开链（如把 `location.href` 私有页地址传进来）时**不复制、不分享**，按钮与顶部提示如实告知
+> 「这条链接不是公开分享链」，并通过 `onResult` 回报 `{ ok:false, outcome:'blocked' }`——绝不静默外泄。
+
 无需自己写环境分支，也无需处理点击重决策——`mountShare` 内部在点击瞬间重算可用方式列表
 （一次性用户激活只在此刻为 true，系统分享这一刻才能过信号闸），业务侧只管产物与文案。
 要完全自定义 UI 时，用 `core.listActions` + `web.executeAction` 自行组装（决策单源不变）。
+
+## 视频产物：能力边界（如实说明，不承诺做不到的事）
+
+视频和图片不是一回事：图片有长按 / 系统面板两条路，视频在很多环境**根本没有前端保存路径**。
+把视频交给 `artifact` 前，先看清下面三条边界（对应红线 5「不承诺做不到的事」）：
+
+| 边界 | 事实 | 你要怎么做 |
+|---|---|---|
+| **`URL.createObjectURL` 内存** | 把视频读成 `File` / `blob` 走对象 URL，整段视频会驻留内存，blob URL 指向的内存**不会自动回收**（本包只在 `save.album` 现造 blob 时延后 `revokeObjectURL`；你自造给 `artifact.files` 的 URL 由你负责释放） | 大视频不要整段读进内存再分享；能用直链就用直链；自造的对象 URL 用完 `URL.revokeObjectURL` |
+| **系统分享的体积上限** | `navigator.share({ files: [大视频] })` 各端对文件体积有**上限**（iOS / Android 各不相同），超限会抛错或静默失败；上限随系统版本变，无法可靠预判 | 不要指望系统面板传大视频；大视频优先「复制链接 / 打开外部浏览器」，或让用户下载后在系统里分享 |
+| **微信内视频无前端保存路径** | 微信内置浏览器（iOS / Android）不给 H5 保存视频的前端路径，`a[download]` 也带不动视频 | 微信内视频只给「复制链接，去手机浏览器打开」并如实说明；**不出现「已保存」语义** |
+
+补充：`save.album` 在**桌面**的语义是「存到本机下载目录」，不是「进相册」——本包下载走 `a[download]`，
+落点是**本机文件 / 下载目录**，视频尤其永远进不了相册。相关文案统一说「本机」，不说「相册」。
 
 ## 红线（12 条，违者必改）
 
@@ -172,7 +194,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，106 条）
+make test       # 跑全部测试（node:test，146 条）
 make lint       # node --check 所有源文件
 ```
 

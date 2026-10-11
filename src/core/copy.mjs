@@ -97,6 +97,8 @@ export const COPY = Object.freeze({
   'fail-retry': Object.freeze({ id: 'fail-retry', text: '没能完成，可以再点一次', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
   'fail-blocked-video': Object.freeze({ id: 'fail-blocked-video', text: '这个环境存不了视频，复制链接到浏览器打开', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
   'fail-guidance-image': Object.freeze({ id: 'fail-guidance-image', text: '长按图片，选保存到相册', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
+  // S3：非公开分享链（私有页 / 带 token）不得复制或分享出去——拒绝执行并如实说明，不静默。
+  'fail-private-url': Object.freeze({ id: 'fail-private-url', text: '这条链接不是公开分享链，不能复制或分享', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
   // 只在「本包确实拿到成功结果」时渲染；走系统面板的环境不得使用（无法确知面板内发生了什么，引 R7）
   // 措辞用「本机」不用「相册」：save.album 在桌面环境的落点是下载目录（见 actions.mjs 语义提醒），
   // 而它成为 primary 的场合实际都是桌面——写「相册」会承诺一个不存在的去处（2026-09-18 改）。

@@ -33,11 +33,22 @@ export interface ShareHandle {
 /** 引导类动作 → core 文案 id 的映射（导出仅供测试；非包公共出口） */
 export declare const GUIDANCE_COPY_ID: Readonly<Record<string, string>>
 
+/** 敏感 query 键：出现即判非公开分享链 */
+export declare const SENSITIVE_QUERY_KEYS: readonly string[]
+
+/** 默认公开分享域 */
+export declare const DEFAULT_PUBLIC_HOSTS: readonly string[]
+
+/** 判 URL 是否公开分享链（host 在允许域内 + 无敏感 query）；私有页/token/非法 URL 一律 false */
+export declare function isPublicShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
+
 export function mountShare(
   target: HTMLElement,
   options?: {
     artifact?: ShareArtifact
     labels?: ShareLabels
     onResult?: (result: ShareResult) => void
+    /** 站点声明的公开分享域（缺省 share.hxym18.com）；非公开链会被拒绝复制/分享 */
+    publicHosts?: readonly string[]
   }
 ): ShareHandle
