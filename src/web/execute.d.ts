@@ -24,6 +24,8 @@ export interface ExecuteDeps {
    */
   openExternal?: () => unknown
   url?: string
+  /** 下载源（save.album）：无 File 时的备用 URL；优先 files[0] */
+  fileUrl?: string
   files?: unknown
   title?: string
   text?: string

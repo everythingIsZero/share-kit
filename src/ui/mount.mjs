@@ -83,10 +83,16 @@ export function mountShare(target, options = {}) {
     share: (payload) => navigator.share(payload),
     download: defaultDownload,
     copy: defaultCopy,
-    url: artifact.url || location.href,
+    // S3：url 只作公开分享链，**不再 `|| location.href`**——页面地址可能是私有页（带 token），
+    // 落到复制/系统分享即外泄；缺 url 时宁可给空，也不拿当前页顶替。
+    url: artifact.url,
     title: artifact.title,
     text: artifact.text,
     filename: artifact.filename,
+    // 下载源（save.album）：优先文件，缺 File 时用 fileUrl；执行时取值，挂载后补仍有效
+    get fileUrl() {
+      return artifact.fileUrl
+    },
     get files() {
       return artifact.files
     },

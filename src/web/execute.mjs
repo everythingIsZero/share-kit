@@ -35,7 +35,12 @@ function invoke(actionId, deps) {
     if (deps.files && deps.files.length > 0) return fn({ files: deps.files, title: deps.title, text: deps.text })
     return fn({ url: deps.url, title: deps.title, text: deps.text })
   }
-  if (depKey === 'download') return fn({ url: deps.url, files: deps.files, filename: deps.filename })
+  if (depKey === 'download') {
+    // S3：下载源是**文件**（files[0] → fileUrl），绝不拿页面 url 顶替——否则下到的是页面 HTML。
+    const file = deps.files && deps.files[0]
+    const url = file ? URL.createObjectURL(file) : deps.fileUrl || ''
+    return fn({ url, filename: deps.filename })
+  }
   return fn(deps.url)
 }
 
@@ -52,7 +57,7 @@ function toResult(actionId, error) {
 }
 
 /**
- * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, files, title, text }`。
+ * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, fileUrl, files, title, text }`。
  *
  * `openExternal` 是「去外部浏览器」引导按钮的注入点：本函数**不会自动调用它**——
  * 自动跳浏览器会打断用户，是否提供这一步由调用方接线。

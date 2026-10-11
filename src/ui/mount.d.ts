@@ -3,15 +3,17 @@ import type { ShareLabels } from './view'
 /** 业务交给 mountShare 的分享产物（执行时取值的可变引用） */
 export interface ShareArtifact {
   kind: 'image' | 'video' | 'link'
-  /** 分享链接（copy.link / 系统分享 / 卡片用；缺省取 location.href） */
+  /** 公开分享链（copy.link / 系统分享 / 卡片用）。**缺省不给 location.href**（S3：私有页不外泄） */
   url?: string
   title?: string
   text?: string
   /** 参与文件分享的 File 列表（share.system） */
   files?: Array<File> | undefined
+  /** 下载源（save.album）：无 files[0] 时的备用 URL（缺省则下载失败，绝不回退页面地址） */
+  fileUrl?: string
   /** 下载文件名（save.album） */
   filename?: string
-  /** 图片直链：海报预览层大图源与下载源（缺省时用 files[0] 现造 blob URL） */
+  /** 图片直链：海报预览层大图源（缺省时用 files[0] 现造 blob URL） */
   imageUrl?: string
 }
 

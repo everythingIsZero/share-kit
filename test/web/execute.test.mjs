@@ -90,3 +90,39 @@ test('缺注入实现不抛到调用方：转成失败结果', async () => {
   assert.equal(result.ok, false)
   assert.equal(result.outcome, 'failed')
 })
+
+test('save.album 下载文件源：有 files 用 files[0] 现造 blob，不落页面 url', async () => {
+  const seen = []
+  const blob = new Blob(['x'], { type: 'image/png' })
+  const deps = {
+    url: 'https://page/private?token=x',
+    fileUrl: 'blob:file',
+    files: [blob],
+    filename: 'p.png',
+    download: (a) => seen.push(a),
+  }
+  await executeAction('save.album', deps)
+  assert.ok(seen[0].url.startsWith('blob:'), '下载源应是文件 blob')
+  assert.notEqual(seen[0].url, 'https://page/private?token=x', '不得下载页面 URL')
+  assert.notEqual(seen[0].url, 'blob:file', '有 files[0] 时优先于 fileUrl')
+  assert.equal(seen[0].filename, 'p.png')
+})
+
+test('save.album 无 files 时用 fileUrl，仍不落页面 url', async () => {
+  const seen = []
+  const deps = {
+    url: 'https://page/private?token=x',
+    fileUrl: 'blob:file',
+    filename: 'p.png',
+    download: (a) => seen.push(a),
+  }
+  await executeAction('save.album', deps)
+  assert.equal(seen[0].url, 'blob:file')
+  assert.notEqual(seen[0].url, 'https://page/private?token=x', '不得下载页面 URL')
+})
+
+test('save.album 无文件源时给空串，绝不回退到 url（页面 HTML）', async () => {
+  const seen = []
+  await executeAction('save.album', { url: 'https://page/private?token=x', download: (a) => seen.push(a) })
+  assert.equal(seen[0].url, '', '无文件源不得拿页面 url 顶替')
+})
