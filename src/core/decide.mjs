@@ -25,6 +25,10 @@ export const UNCONDITIONAL_ACTIONS = Object.freeze([FALLBACK_ACTION])
 /**
  * 信号兜底表：能力表给不出可用动作时，图片 / 视频仍有一条**当场可探**的路——直接下载。
  *
+ * 兜底动作是 `save.download`（`a[download]` → 下载目录），**不是** `save.album`
+ * （系统面板 → 相册/文件）：信号只探得到 `a[download]` 属性，探不到系统面板，
+ * 拿下载去兑现「相册」就是承诺做不到的事（红线 5）。
+ *
  * 依据不是文档猜测，而是运行时信号（`hasDownloadAttr !== false` 才走，探不到仍退回复制链接），
  * 所以未实测环境也能用——R16 只禁「强引导」，而下载这个动作自明、不需要引导（hint 为 null）。
  * 口径来源（2026-09-18 出资人）：「能分享才给分享，不能分享就走下载」——PC 微信打开海报页
@@ -32,8 +36,8 @@ export const UNCONDITIONAL_ACTIONS = Object.freeze([FALLBACK_ACTION])
  * `link` 产物不在表内：链接没有「存到本地」的语义（ARTIFACT_ACTION_GATES 同此口径）。
  */
 export const SIGNAL_FALLBACK = Object.freeze({
-  image: 'save.album',
-  video: 'save.album',
+  image: 'save.download',
+  video: 'save.download',
 })
 
 /** reason 短码（机器可读，不是给用户看的文案） */
@@ -64,8 +68,10 @@ export const INTUITIVE_CONFLICT_ENVS = Object.freeze([
 
 /** 事前提示表：`<环境键>|<产物种类>` → 文案 id；未列出的环境不出事前说明 */
 export const PRE_HINTS = Object.freeze({
+  // 微信 iOS 图片可长按保存（jinlab 实测）→ 给长按引导；
+  // 微信 Android（XWeb）长按保存失败、下载被拦（jinlab 实测），**不得**给长按引导，
+  // 故不列 `wechat:android|image`，落中性兜底（见 pickHint）。
   'wechat:ios|image': 'longpress-image',
-  'wechat:android|image': 'longpress-image',
   'wechat:ios|video': 'external-open-video',
   'wechat:android|video': 'external-open-video',
   // 微信系（含 PC）link 产物落到 share.card.wx：点按钮不会弹分享面板，必须走右上角菜单，
@@ -89,25 +95,27 @@ export const NEUTRAL_HINT_IDS = Object.freeze({
 
 /**
  * 产物偏好序：同一环境里可用的动作可能不止一个，按此顺序取第一个。
- * 系统分享面板排在直接下载之前——它是唯一「既能存又能分享」的统一出口，
- * 而 iOS 上直接下载只落「文件」App、不进相册。
+ * 系统分享面板排在保存之前——它是唯一「既能存又能分享」的统一出口；
+ * `save.album`（系统面板保存 → 相册/文件）又排在 `save.download`（a[download] → 下载目录）
+ * 之前：有系统面板就用面板（能进相册），否则才退到下载。
  */
 export const ARTIFACT_PREFERENCE = Object.freeze({
-  image: Object.freeze(['share.system', 'save.album', 'preview.longpress', 'share.card.wx', 'copy.link']),
-  video: Object.freeze(['share.system', 'save.album', 'share.card.wx', 'copy.link']),
+  image: Object.freeze(['share.system', 'save.album', 'save.download', 'preview.longpress', 'share.card.wx', 'copy.link']),
+  video: Object.freeze(['share.system', 'save.album', 'save.download', 'share.card.wx', 'copy.link']),
   link: Object.freeze(['share.system', 'share.card.wx', 'share.card.miniapp', 'copy.link']),
 })
 
 /**
  * 产物动作闸：动作能不能带得动这种产物（与「环境能不能用这个动作」正交）。
  * - preview.longpress 只对图片成立：长按视频没有保存菜单项；
- * - save.album 只对图片与视频成立：链接没有「存到本地」的语义；
+ * - save.album / save.download 只对图片与视频成立：链接没有「存到本地」的语义；
  * - share.card.wx 只对链接成立：微信内只能预设链接卡片，卡片带不动文件；
  * - share.card.miniapp 只对链接与图片成立：小程序的图片分享菜单带不动视频。
  */
 export const ARTIFACT_ACTION_GATES = Object.freeze({
   'preview.longpress': Object.freeze(['image']),
   'save.album': Object.freeze(['image', 'video']),
+  'save.download': Object.freeze(['image', 'video']),
   'share.card.wx': Object.freeze(['link']),
   'share.card.miniapp': Object.freeze(['link', 'image']),
 })
@@ -118,6 +126,9 @@ export const ARTIFACT_ACTION_GATES = Object.freeze({
  * - `canShareFiles === false` 只闸**要带文件**的产物（image / video）——link 不带文件，
  *   桌面 Chrome 文件分享探否但链接分享本可用，不得过杀
  *   （2026-10-05 修复：此前无差别闸掉了 link 的系统分享，与能力表 browser 桌面行矛盾）。
+ *
+ * `save.album`（系统面板保存）与 share.system 一样走系统分享接口（带文件），故同受
+ * 「一次性激活 + 接口存在 + 能带文件」三闸；`save.download`（a[download]）只依赖下载属性。
  */
 function signalsAllow(actionId, signals, artifactKind) {
   const s = signals && typeof signals === 'object' ? signals : {}
@@ -126,7 +137,12 @@ function signalsAllow(actionId, signals, artifactKind) {
     if (s.hasShare === false) return false
     if (s.canShareFiles === false && artifactKind !== 'link') return false
   }
-  if (actionId === 'save.album' && s.hasDownloadAttr === false) return false
+  if (actionId === 'save.album') {
+    if (s.hasTransientActivation === false) return false
+    if (s.hasShare === false) return false
+    if (s.canShareFiles === false) return false
+  }
+  if (actionId === 'save.download' && s.hasDownloadAttr === false) return false
   return true
 }
 
@@ -183,8 +199,10 @@ function neutralPlan(reason) {
  *
  * 三重过滤：能力表（isAvailable）× 产物闸（artifactAllows）× 信号闸（signalsAllow）；
  * 无条件动作（copy.link）跳过三闸恒入列，因此返回列表永不为空。
+ * 保存二选一：`save.album`（系统面板）已入列时不再列 `save.download`（a[download]）——
+ * 同一「保存」意图的两条机制，有面板就用面板（能进相册），否则才用下载。
  * 信号兜底口径与 decideAction 原实现一致：能力表给不出比 copy.link 更强的动作、
- * 且运行时信号探得可下载时，image/video 把 save.album 插到 copy.link 之前。
+ * 且运行时信号探得可下载时，image/video 把 save.download 插到 copy.link 之前。
  */
 function availableActions(artifactKind, row, signals) {
   const out = []
@@ -197,6 +215,8 @@ function availableActions(artifactKind, row, signals) {
       out.push(actionId)
       continue
     }
+    // 保存二选一：save.album 已入列则跳过 save.download（偏好序里 album 在前，此处必已处理）
+    if (actionId === 'save.download' && out.includes('save.album')) continue
     if (!isAvailable(row[actionId])) continue
     if (!artifactAllows(actionId, artifactKind)) {
       gatedByArtifact = true
@@ -267,7 +287,7 @@ export function decideAction(input) {
  * 输入与 decideAction 相同；输出 `{ actions: [{ id, isPrimary }], reason }`：
  * - `actions` 按产物偏好序排列，第一项即主推荐（isPrimary: true），其余为次要项；
  * - copy.link 恒在列；若它是唯一项，主推荐落在它身上；
- * - 信号兜底与 decideAction 同口径（能力表全灭 + 运行时探得可下载 → save.album 入列）；
+ * - 信号兜底与 decideAction 同口径（能力表全灭 + 运行时探得可下载 → save.download 入列）；
  * - share.system 受 hasTransientActivation 信号闸：**首帧调用时它通常不在列**，
  *   必须在点击瞬间（一次性用户激活为 true 时）重调本函数，才能拿到含系统分享的完整列表。
  */

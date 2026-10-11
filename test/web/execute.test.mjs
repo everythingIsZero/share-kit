@@ -95,7 +95,7 @@ test('缺注入实现不抛到调用方：转成失败结果', async () => {
   assert.equal(result.outcome, 'failed')
 })
 
-test('save.album 下载文件源：有 files 用 files[0] 现造 blob，不落页面 url', async () => {
+test('save.download 下载文件源：有 files 用 files[0] 现造 blob，不落页面 url', async () => {
   const seen = []
   const blob = new Blob(['x'], { type: 'image/png' })
   const deps = {
@@ -105,14 +105,14 @@ test('save.album 下载文件源：有 files 用 files[0] 现造 blob，不落�
     filename: 'p.png',
     download: (a) => seen.push(a),
   }
-  await executeAction('save.album', deps)
+  await executeAction('save.download', deps)
   assert.ok(seen[0].url.startsWith('blob:'), '下载源应是文件 blob')
   assert.notEqual(seen[0].url, 'https://page/private?token=x', '不得下载页面 URL')
   assert.notEqual(seen[0].url, 'blob:file', '有 files[0] 时优先于 fileUrl')
   assert.equal(seen[0].filename, 'p.png')
 })
 
-test('save.album 无 files 时用 fileUrl，仍不落页面 url', async () => {
+test('save.download 无 files 时用 fileUrl，仍不落页面 url', async () => {
   const seen = []
   const deps = {
     url: 'https://page/private?token=x',
@@ -120,14 +120,14 @@ test('save.album 无 files 时用 fileUrl，仍不落页面 url', async () => {
     filename: 'p.png',
     download: (a) => seen.push(a),
   }
-  await executeAction('save.album', deps)
+  await executeAction('save.download', deps)
   assert.equal(seen[0].url, 'blob:file')
   assert.notEqual(seen[0].url, 'https://page/private?token=x', '不得下载页面 URL')
 })
 
-test('save.album 无文件源时给空串，绝不回退到 url（页面 HTML）', async () => {
+test('save.download 无文件源时给空串，绝不回退到 url（页面 HTML）', async () => {
   const seen = []
-  await executeAction('save.album', { url: 'https://page/private?token=x', download: (a) => seen.push(a) })
+  await executeAction('save.download', { url: 'https://page/private?token=x', download: (a) => seen.push(a) })
   assert.equal(seen[0].url, '', '无文件源不得拿页面 url 顶替')
 })
 
@@ -137,14 +137,14 @@ test('copy.link 空 url 稳健：execute 传空串而非 undefined（不得复�
   assert.equal(seen, '', '缺 url 时注入实现应收到空串，而不是 undefined')
 })
 
-test('save.album 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', async () => {
+test('save.download 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', async () => {
   const revoked = []
   const orig = URL.revokeObjectURL
   URL.revokeObjectURL = (u) => revoked.push(u)
   try {
     const blob = new Blob(['x'], { type: 'image/png' })
     const seen = []
-    await executeAction('save.album', { files: [blob], filename: 'p.png', download: (a) => seen.push(a) })
+    await executeAction('save.download', { files: [blob], filename: 'p.png', download: (a) => seen.push(a) })
     await new Promise((r) => setTimeout(r, 5))
     assert.ok(seen[0].url.startsWith('blob:'), '下载源应是现造的 blob URL')
     assert.deepEqual(revoked, [seen[0].url], '现造的对象 URL 应在用毕后释放')
@@ -153,15 +153,46 @@ test('save.album 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', a
   }
 })
 
-test('save.album 用 fileUrl 时不释放对象 URL（所有权归调用方）', async () => {
+test('save.download 用 fileUrl 时不释放对象 URL（所有权归调用方）', async () => {
   const revoked = []
   const orig = URL.revokeObjectURL
   URL.revokeObjectURL = (u) => revoked.push(u)
   try {
-    await executeAction('save.album', { fileUrl: 'blob:file', download: () => {} })
+    await executeAction('save.download', { fileUrl: 'blob:file', download: () => {} })
     await new Promise((r) => setTimeout(r, 5))
     assert.deepEqual(revoked, [], '调用方给的 fileUrl 不得由本包释放')
   } finally {
     URL.revokeObjectURL = orig
   }
+})
+
+test('save.album 走系统面板：注入 share 收到 files；缺文件也不拿 url 顶替', async () => {
+  let seen = null
+  await executeAction('save.album', {
+    url: 'https://page/private?token=x',
+    files: [{ name: 'p.png' }],
+    share: (d) => {
+      seen = d
+      return Promise.resolve()
+    },
+  })
+  assert.equal(seen.files.length, 1, 'save.album 用文件（系统面板保存）')
+  assert.equal(seen.url, undefined, 'save.album 是文件保存，绝不带 url')
+
+  let bare = null
+  await executeAction('save.album', {
+    url: 'https://page/private?token=x',
+    share: (d) => {
+      bare = d
+      return Promise.resolve()
+    },
+  })
+  assert.equal(bare.url, undefined, '缺 files 时也不得退化成分享链接')
+  assert.equal(bare.files, undefined)
+})
+
+test('ACTION_DEP_MAP：save.album → share（系统面板），save.download → download（a[download]）', () => {
+  assert.equal(ACTION_DEP_MAP['save.album'], 'share')
+  assert.equal(ACTION_DEP_MAP['save.download'], 'download')
+  assert.notEqual(ACTION_DEP_MAP['save.album'], ACTION_DEP_MAP['save.download'])
 })

@@ -48,6 +48,14 @@ test('微信内置浏览器且产物是图片：primary=preview.longpress，绝�
   assert.equal(plan.reason, REASON_CODES.primaryAvailable)
 })
 
+test('微信 Android 图片：长按保存失败 → 不给长按引导，落中性兜底（item 2）', () => {
+  const plan = decideAction({ fingerprint: fp('wechat', 'android', 'blink'), artifactKind: 'image' })
+  assert.equal(plan.primary, 'copy.link')
+  assert.notEqual(plan.hint && plan.hint.copyId, 'longpress-image', 'Android 长按保存失败，不得给长按引导')
+  assert.equal(isStrongGuidance(plan.hint.copyId), false)
+  assert.equal(plan.hint.copyId, NEUTRAL_HINT_IDS.image)
+})
+
 test('微信内置浏览器且产物是视频：primary=copy.link，说明去外部浏览器，无「已保存」语义', () => {
   const plan = decideAction({ fingerprint: fp('wechat', 'ios', 'wkwebview'), artifactKind: 'video' })
   assert.equal(plan.primary, 'copy.link')
@@ -88,13 +96,13 @@ test('非微信浏览器且可分享文件：primary=share.system', () => {
   })
   assert.equal(withSignal.primary, 'share.system')
 
-  // 信号明确否决时降级到下一顺位，且原因如实标注
+  // 信号明确否决时降级到下一顺位（系统面板保存也要文件分享，同样被闸）→ 落下载
   const denied = decideAction({
     fingerprint: fp('browser', 'macos', 'blink'),
     artifactKind: 'image',
     signals: { canShareFiles: false },
   })
-  assert.equal(denied.primary, 'save.album')
+  assert.equal(denied.primary, 'save.download')
   assert.equal(denied.reason, REASON_CODES.primaryAvailable)
 
   // 连下一顺位也被否决（无 a[download]）→ 落复制链接，原因标为信号否决
@@ -117,11 +125,12 @@ test('信号闸按产物区分：canShareFiles=false 只闸带文件的产物，
   // link 不带文件：share({url}) 本可用，必须入列（此前被无差别闸掉，与能力表矛盾）
   const link = listActions({ ...base, artifactKind: 'link' })
   assert.deepEqual(link.actions.map((a) => a.id), ['share.system', 'copy.link'])
-  // image / video 要带文件：canShareFiles 如实闸掉，落下一顺位
+  // image / video 要带文件：canShareFiles 如实闸掉 share.system 与 save.album（都走系统面板）→ 落 save.download
   for (const kind of ['image', 'video']) {
     const r = listActions({ ...base, artifactKind: kind })
     assert.equal(r.actions.some((a) => a.id === 'share.system'), false, `${kind} 不该有 share.system`)
-    assert.equal(r.actions[0].id, 'save.album')
+    assert.equal(r.actions[0].id, 'save.download')
+    assert.equal(r.actions.some((a) => a.id === 'save.album'), false, `${kind} 桌面无系统面板保存`)
   }
   // navigator.share 不存在（Firefox / Safari 桌面）：link 也无路可走，不得列必失败项
   const noShare = listActions({ ...base, artifactKind: 'link', signals: { ...base.signals, hasShare: false } })
@@ -241,7 +250,7 @@ test('PC 微信打开海报：无分享动作可用时靠信号落下载，不�
       artifactKind: 'image',
       signals: { hasDownloadAttr: true },
     })
-    assert.equal(plan.primary, 'save.album', `${os}：图片产物应落下载`)
+    assert.equal(plan.primary, 'save.download', `${os}：图片产物应落下载`)
     assert.equal(plan.reason, REASON_CODES.signalFallback)
     assert.equal(plan.hint, null, '下载是自明动作，不该给事前说明（更不能拿「复制链接」的中性文案冒充）')
     assert.equal(plan.fallback, 'copy.link', '复制链接仍作次选保留')
@@ -275,10 +284,11 @@ test('信号兜底只管图片与视频：链接没有「存到本地」的语�
   assert.equal(plan.primary, 'copy.link', 'link 产物即使探得到 a[download] 也不走下载')
 })
 
-test('PC 微信的 save.album 不得再被判成确定不可用（「无相册」是手机语义的理由）', () => {
+test('PC 微信的 save.download 不得被判成确定不可用（「无相册」是手机语义的理由）', () => {
+  // 迁移：旧的 save.album（a[download]）语义现由 save.download 承载，PC 微信如实留未实测
   for (const key of ['wechat-desktop:macos', 'wechat-desktop:windows']) {
-    assert.equal(CAPABILITY_TABLE[key]['save.album'].evidence, '未实测', `${key} 的 save.album 应如实留未实测`)
-    assert.equal(CAPABILITY_TABLE[key]['save.album'].available, null)
+    assert.equal(CAPABILITY_TABLE[key]['save.download'].evidence, '未实测', `${key} 的 save.download 应如实留未实测`)
+    assert.equal(CAPABILITY_TABLE[key]['save.download'].available, null)
   }
 })
 
@@ -307,17 +317,18 @@ test('listActions 与 decideAction 永远一致：主推荐 = decideAction 的 p
   }
 })
 
-test('iOS 浏览器图片·点击瞬间：[系统分享(主), 查看大图, 复制链接]，绝不列会失败的项', () => {
+test('iOS 浏览器图片·点击瞬间：[系统分享(主), 保存图片, 查看大图, 复制链接]，绝不列会失败的项', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK_SIGNALS })
-  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'preview.longpress', 'copy.link'])
+  // save.album（系统面板 → 相册/文件）在 iOS 可用；save.download 被「保存二选一」抑制
+  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'save.album', 'preview.longpress', 'copy.link'])
   assert.equal(list.actions[0].isPrimary, true)
-  // save.album 在 iOS 浏览器能力表为 false（落「文件」不进相册），不得入列
-  assert.equal(list.actions.some((a) => a.id === 'save.album'), false)
+  assert.equal(list.actions.some((a) => a.id === 'save.download'), false, '有系统面板保存时不再列下载')
 })
 
-test('iOS 浏览器图片·首帧（无激活）：系统分享被信号闸挡，不在列', () => {
+test('iOS 浏览器图片·首帧（无激活）：系统面板类动作被信号闸挡，落下载', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: { hasTransientActivation: false, canShareFiles: true, hasDownloadAttr: true } })
-  assert.deepEqual(list.actions.map((a) => a.id), ['preview.longpress', 'copy.link'])
+  // share.system / save.album 都要一次性激活；未激活时只剩 save.download（a[download] 不依赖激活）
+  assert.deepEqual(list.actions.map((a) => a.id), ['save.download', 'preview.longpress', 'copy.link'])
 })
 
 test('微信 iOS 图片：[查看大图(主), 复制链接]（卡片带不动图片，被产物闸挡）', () => {
@@ -331,9 +342,10 @@ test('微信 iOS 链接：[转发卡片(主), 复制链接]', () => {
   assert.deepEqual(list.actions.map((a) => a.id), ['share.card.wx', 'copy.link'])
 })
 
-test('桌面浏览器图片·点击瞬间：[系统分享(主), 保存本机, 复制链接]', () => {
+test('桌面浏览器图片·点击瞬间：[系统分享(主), 下载本机, 复制链接]', () => {
   const list = listActions({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'image', signals: CLICK_SIGNALS })
-  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'save.album', 'copy.link'])
+  // 桌面无系统面板保存（save.album=false），保存动作是 save.download（下载）
+  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'save.download', 'copy.link'])
 })
 
 test('小程序 web-view：唯一动作复制链接，主推荐落在它身上', () => {
@@ -342,14 +354,14 @@ test('小程序 web-view：唯一动作复制链接，主推荐落在它身上',
   assert.equal(list.actions[0].isPrimary, true)
 })
 
-test('信号兜底入列：PC 微信图片 + 探得 a[download] → [保存本机(主), 复制链接]', () => {
+test('信号兜底入列：PC 微信图片 + 探得 a[download] → [下载本机(主), 复制链接]', () => {
   const list = listActions({ fingerprint: fp('wechat-desktop', 'macos'), artifactKind: 'image', signals: { hasDownloadAttr: true } })
-  assert.deepEqual(list.actions.map((a) => a.id), ['save.album', 'copy.link'])
+  assert.deepEqual(list.actions.map((a) => a.id), ['save.download', 'copy.link'])
   assert.equal(list.reason, REASON_CODES.signalFallback)
 })
 
 test('文档级否决优先于运行时信号：能力表明确 false 的环境不走信号兜底', () => {
-  // 小程序 web-view 的 save.album 是文档级 false（H5 不能写相册）；
+  // 小程序 web-view 的 save.download 是文档级 false（宿主屏蔽下载）；
   // a[download] 特性探测为 true 不代表下载不被宿主屏蔽——绝不列会失败的项（红线 2）
   const list = listActions({ fingerprint: fp('wechat-miniprogram-webview', 'ios'), artifactKind: 'image', signals: { hasDownloadAttr: true } })
   assert.deepEqual(list.actions.map((a) => a.id), ['copy.link'])

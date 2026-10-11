@@ -8,11 +8,11 @@ import { readFileSync, readdirSync } from 'node:fs'
 
 import { ACTIONS, ACTION_IDS, ARTIFACT_KINDS, isActionId, isArtifactKind } from '../../src/core/actions.mjs'
 
-test('动作枚举完整且无多余项（六项，逐字面量比对）', () => {
-  const expected = ['save.album', 'share.system', 'share.card.wx', 'share.card.miniapp', 'copy.link', 'preview.longpress']
+test('动作枚举完整且无多余项（七项，逐字面量比对）', () => {
+  const expected = ['save.album', 'save.download', 'share.system', 'share.card.wx', 'share.card.miniapp', 'copy.link', 'preview.longpress']
   assert.deepEqual(Object.keys(ACTIONS).sort(), [...expected].sort())
   assert.deepEqual([...ACTION_IDS].sort(), [...expected].sort())
-  assert.equal(ACTION_IDS.length, 6)
+  assert.equal(ACTION_IDS.length, 7)
 })
 
 test('每个动作都有短码与中文名，且短码不重复', () => {
@@ -27,9 +27,14 @@ test('每个动作都有短码与中文名，且短码不重复', () => {
   assert.equal(new Set(codes).size, codes.length, 'shortCode 必须唯一')
 })
 
-test('save.album 的 label 说「本机」不说「相册」（a[download] 落点是本机文件，非相册）', () => {
-  assert.equal(ACTIONS['save.album'].label, '存到本机')
-  assert.equal(ACTIONS['save.album'].label.includes('相册'), false)
+test('保存两动作的 label 分别如实：save.album 说「相册」、save.download 说「本机」不说「相册」', () => {
+  // save.album = 系统面板保存（→ 相册/文件），才可用「相册」措辞
+  assert.equal(ACTIONS['save.album'].label, '存到相册')
+  assert.ok(ACTIONS['save.album'].label.includes('相册'))
+  // save.download = a[download] 下载（→ 下载目录），绝不承诺相册
+  assert.equal(ACTIONS['save.download'].label, '下载到本机')
+  assert.equal(ACTIONS['save.download'].label.includes('相册'), false)
+  assert.notEqual(ACTIONS['save.download'].shortCode, ACTIONS['save.album'].shortCode)
 })
 
 test('产物种类恰为 image / video / link', () => {
@@ -43,6 +48,7 @@ test('产物种类恰为 image / video / link', () => {
 test('isActionId：只认枚举内字符串，越界与非法类型一律 false', () => {
   assert.equal(isActionId('copy.link'), true)
   assert.equal(isActionId('save.album'), true)
+  assert.equal(isActionId('save.download'), true)
   assert.equal(isActionId('save.photo'), false)
   assert.equal(isActionId(''), false)
   assert.equal(isActionId(null), false)

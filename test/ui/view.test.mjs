@@ -18,20 +18,28 @@ const CLICK = { canShareFiles: true, hasTransientActivation: true, hasDownloadAt
 test('sheetItemsOf：项数据带标签与主推荐标记，保持偏好序', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK })
   const items = sheetItemsOf(list, 'image')
-  assert.deepEqual(items.map((i) => i.id), ['share.system', 'preview.longpress', 'copy.link'])
+  // save.album（系统面板保存）入列；save.download 因 save.album 已在列而被二选一抑制
+  assert.deepEqual(items.map((i) => i.id), ['share.system', 'save.album', 'preview.longpress', 'copy.link'])
   assert.deepEqual(
     items.map((i) => i.label),
-    ['分享', '长按保存海报', '复制链接']
+    ['分享', '保存图片', '长按保存海报', '复制链接']
   )
   assert.equal(items[0].isPrimary, true)
   assert.equal(items.filter((i) => i.isPrimary).length, 1)
 })
 
-test('save.album 标签按产物区分：图片「保存图片」、视频「保存视频」', () => {
+test('保存两动作标签分别如实：save.album「保存图片/视频」，save.download「下载图片/视频」', () => {
+  // 桌面浏览器：无系统面板保存 → save.download 是保存动作（标签必须是「下载」不是「保存」）
   const image = sheetItemsOf(listActions({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'image', signals: CLICK }), 'image')
   const video = sheetItemsOf(listActions({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'video', signals: CLICK }), 'video')
-  assert.equal(image.find((i) => i.id === 'save.album').label, '保存图片')
-  assert.equal(video.find((i) => i.id === 'save.album').label, '保存视频')
+  assert.equal(image.find((i) => i.id === 'save.download').label, '下载图片')
+  assert.equal(video.find((i) => i.id === 'save.download').label, '下载视频')
+  assert.equal(image.some((i) => i.id === 'save.album'), false, '桌面无系统面板保存')
+
+  // iOS：系统面板保存入列（「保存图片」），下载被二选一抑制
+  const iosImage = sheetItemsOf(listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK }), 'image')
+  assert.equal(iosImage.find((i) => i.id === 'save.album').label, '保存图片')
+  assert.equal(iosImage.some((i) => i.id === 'save.download'), false)
 })
 
 test('labels.actions 覆盖项文案，labels.button 覆盖多项时的按钮文案', () => {
@@ -70,7 +78,7 @@ test('sheetTitleOf：默认「选择分享方式」，可覆盖', () => {
 })
 
 test('全部动作都有默认标签（sheet 不出现裸 id）', () => {
-  for (const id of ['share.system', 'save.album', 'preview.longpress', 'share.card.wx', 'share.card.miniapp', 'copy.link']) {
+  for (const id of ['share.system', 'save.album', 'save.download', 'preview.longpress', 'share.card.wx', 'share.card.miniapp', 'copy.link']) {
     assert.ok(SHEET_LABELS[id], `${id} 缺默认标签`)
   }
 })

@@ -7,11 +7,11 @@ export interface ShareArtifact {
   url?: string
   title?: string
   text?: string
-  /** 参与文件分享的 File 列表（share.system） */
+  /** 参与文件分享的 File 列表（share.system / save.album 系统面板保存） */
   files?: Array<File> | undefined
-  /** 下载源（save.album）：无 files[0] 时的备用 URL（缺省则下载失败，绝不回退页面地址） */
+  /** 下载源（save.download）：无 files[0] 时的备用 URL（缺省则下载失败，绝不回退页面地址） */
   fileUrl?: string
-  /** 下载文件名（save.album） */
+  /** 下载文件名（save.download） */
   filename?: string
   /** 图片直链：海报预览层大图源（缺省时用 files[0] 现造 blob URL） */
   imageUrl?: string

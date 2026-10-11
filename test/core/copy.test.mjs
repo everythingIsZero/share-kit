@@ -113,12 +113,21 @@ test('闸门判定不可达的文案条目不得留在表里（死条目防回�
   }
 })
 
-test('save.album 引导文案说「本机」不说「相册」（a[download] 落点是下载目录/文件，视频永不进相册）', () => {
-  for (const id of ['save-album-image', 'save-album-video']) {
+test('保存两动作文案分别如实：save.album 说相册/文件，save.download 说本机不说相册', () => {
+  // save.album = 系统面板保存（navigator.share({files}) → 相册/文件），才可用「相册」措辞
+  const albumImage = getCopy('save-album-image')
+  const albumVideo = getCopy('save-album-video')
+  assert.ok(albumImage && albumVideo, 'save.album 的系统面板保存文案必须存在')
+  assert.ok(albumImage.text.includes('相册'), 'save.album 走系统面板，文案才可说相册')
+  assert.ok(albumVideo.text.includes('相册'), '视频系统面板可存相册或文件')
+  assert.equal(isStrongGuidance('save-album-image'), true)
+
+  // save.download = a[download]（→ 下载目录），绝不承诺相册
+  for (const id of ['save-download-image', 'save-download-video']) {
     const entry = getCopy(id)
-    assert.ok(entry, `${id} 必须存在——它是 save.album 的事前强引导`)
-    assert.equal(entry.text, '会保存到本机')
-    assert.equal(entry.text.includes('相册'), false, `${id} 不得承诺进相册（落点是下载目录/文件）`)
+    assert.ok(entry, `${id} 必须存在——save.download 的下载文案`)
+    assert.equal(entry.text, '会下载到本机')
+    assert.equal(entry.text.includes('相册'), false, `${id} 落下载目录，绝不承诺相册`)
   }
   // 长按图片走的确实是「保存到相册」那条路径，口径保持不变
   assert.ok(getCopy('longpress-image').text.includes('相册'))

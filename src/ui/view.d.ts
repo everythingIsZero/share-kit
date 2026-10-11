@@ -1,4 +1,4 @@
-/** 动作在 Action Sheet 里的默认标签（save.album 按产物区分保存图片/保存视频） */
+/** 动作在 Action Sheet 里的默认标签（save.album 保存 / save.download 下载，各按产物区分图片/视频） */
 export const SHEET_LABELS: Readonly<Record<string, string>>
 
 /** listActions 的结果 → Action Sheet 项数据（保持偏好序，主推荐居首） */

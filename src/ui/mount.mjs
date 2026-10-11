@@ -20,7 +20,7 @@ import { collectSignals, executeAction } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
 
-/** 直接下载（save.album）：a[download] 点击（落点由环境决定——手机落「本机文件」/下载，桌面进下载目录；非相册） */
+/** 直接下载（save.download）：a[download] 点击（落点是本机下载目录 / 「文件」，非相册） */
 function defaultDownload({ url, filename }) {
   const a = document.createElement('a')
   a.href = url
@@ -155,7 +155,7 @@ export function mountShare(target, options = {}) {
     get filename() {
       return artifact.filename
     },
-    // 下载源（save.album）：优先文件，缺 File 时用 fileUrl
+    // 下载源（save.download）：优先文件，缺 File 时用 fileUrl
     get fileUrl() {
       return artifact.fileUrl
     },
@@ -188,7 +188,9 @@ export function mountShare(target, options = {}) {
 
   const doneLabel = (actionId) => {
     if (actionId === 'copy.link') return renderCopy('done-copied')
-    if (actionId === 'save.album') return renderCopy('done-saved')
+    // 只有 save.download（a[download]）落点确定，能如实报「已保存到本机」；
+    // save.album / share.system 走系统面板，面板里发生什么我们不知道（R7），不得报 done。
+    if (actionId === 'save.download') return renderCopy('done-saved')
     return '已完成 · 可再试一次'
   }
 

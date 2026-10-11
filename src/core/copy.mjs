@@ -73,11 +73,13 @@ export const STRONG_GUIDANCE_COPY_IDS = Object.freeze([
  * - `verifiedMenuItem` 默认 null，只有已验证覆盖才可填（见 `resolveCopy`）。
  */
 export const COPY = Object.freeze({
-  // 措辞用「本机」不用「相册」：save.album 是 `a[download]`，落点是**下载目录/文件**，不是相册；
-  // 视频尤其——`a[download]` 存的视频永远进不了相册。与 done-saved 口径一致（2026-10-11 改）。
-  // （longpress-image 保持不变：长按图片走的确实是「保存到相册」那条路径。）
-  'save-album-image': Object.freeze({ id: 'save-album-image', text: '会保存到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
-  'save-album-video': Object.freeze({ id: 'save-album-video', text: '会保存到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  // save.album = **系统面板保存**（navigator.share({files}) → 相册/文件），文案才可说「相册」；
+  // 不得承诺相册而落下载——`a[download]` 的下载动作（save.download）另有文案，落点是下载目录。
+  'save-album-image': Object.freeze({ id: 'save-album-image', text: '会保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  'save-album-video': Object.freeze({ id: 'save-album-video', text: '会保存到相册或文件', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  // save.download = **a[download] 直接下载**，落点是本机下载目录，视频尤其永远进不了相册。
+  'save-download-image': Object.freeze({ id: 'save-download-image', text: '会下载到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  'save-download-video': Object.freeze({ id: 'save-download-video', text: '会下载到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'share-system-image': Object.freeze({ id: 'share-system-image', text: '在系统面板里选保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'share-system-video': Object.freeze({ id: 'share-system-video', text: '在系统面板里选保存位置或目标应用', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   // 微信系只有 link 产物会落到 share.card.wx（见 ARTIFACT_ACTION_GATES：卡片带不动文件），
@@ -99,9 +101,9 @@ export const COPY = Object.freeze({
   'fail-guidance-image': Object.freeze({ id: 'fail-guidance-image', text: '长按图片，选保存到相册', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
   // S3：非公开分享链（私有页 / 带 token）不得复制或分享出去——拒绝执行并如实说明，不静默。
   'fail-private-url': Object.freeze({ id: 'fail-private-url', text: '这条链接不是公开分享链，不能复制或分享', params: Object.freeze([]), tier: 'fail', verifiedMenuItem: null }),
-  // 只在「本包确实拿到成功结果」时渲染；走系统面板的环境不得使用（无法确知面板内发生了什么，引 R7）
-  // 措辞用「本机」不用「相册」：save.album 在桌面环境的落点是下载目录（见 actions.mjs 语义提醒），
-  // 而它成为 primary 的场合实际都是桌面——写「相册」会承诺一个不存在的去处（2026-09-18 改）。
+  // 只在「本包确实拿到成功结果」时渲染；走系统面板（save.album / share.system）的环境不得使用
+  // （无法确知面板内发生了什么，引 R7）。save.download 是 `a[download]`，落点确定在下载目录，
+  // 故可如实报「已保存到本机」——措辞用「本机」不用「相册」（2026-10-11 拆语义后改）。
   'done-saved': Object.freeze({ id: 'done-saved', text: '已保存到本机', params: Object.freeze([]), tier: 'result', verifiedMenuItem: null }),
   // 复制链接也会成为 primary（兜底动作），成功后必须如实报一声，否则用户不知道到底复制上没有（R9）。
   'done-copied': Object.freeze({ id: 'done-copied', text: '链接已复制', params: Object.freeze([]), tier: 'result', verifiedMenuItem: null }),

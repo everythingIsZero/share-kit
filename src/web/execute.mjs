@@ -10,12 +10,17 @@
 
 import { classifyOutcome } from '../core/index.mjs'
 
-/** 动作 → 依赖键的映射；值为 null 表示「引导类动作」，不需要外部调用 */
+/**
+ * 动作 → 依赖键的映射；值为 null 表示「引导类动作」，不需要外部调用。
+ * 保存语义拆分：`save.album`（系统面板保存）走 `share`（`navigator.share({files})`）；
+ * `save.download`（直接下载）走 `download`（`a[download]`）。两者不得混用。
+ */
 export const ACTION_DEP_MAP = Object.freeze({
   'share.system': 'share',
+  'save.album': 'share',
+  'save.download': 'download',
   'share.card.wx': null,
   'share.card.miniapp': null,
-  'save.album': 'download',
   'copy.link': 'copy',
   'preview.longpress': null,
 })
@@ -46,12 +51,14 @@ function invoke(actionId, deps) {
   const fn = deps[depKey]
   if (typeof fn !== 'function') throw new TypeError(`动作 ${actionId} 缺少注入实现：${depKey}`)
   if (depKey === 'share') {
+    // save.album 是「系统面板保存」：只带文件，缺文件时也**不得**拿 url 顶替（那会变成分享链接）
+    if (actionId === 'save.album') return fn({ files: deps.files, title: deps.title, text: deps.text })
     // 有文件产物时只传 files 不传 url：混传会让 iOS 系统面板 / 微信把链接当主体、图片沦为配角
     if (deps.files && deps.files.length > 0) return fn({ files: deps.files, title: deps.title, text: deps.text })
     return fn({ url: deps.url, title: deps.title, text: deps.text })
   }
   if (depKey === 'download') {
-    // S3：下载源是**文件**（files[0] → fileUrl），绝不拿页面 url 顶替——否则下到的是页面 HTML。
+    // save.download：下载源是**文件**（files[0] → fileUrl），绝不拿页面 url 顶替——否则下到的是页面 HTML。
     const file = deps.files && deps.files[0]
     const url = file ? URL.createObjectURL(file) : deps.fileUrl || ''
     const pending = fn({ url, filename: deps.filename })

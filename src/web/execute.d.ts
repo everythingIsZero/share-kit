@@ -12,11 +12,11 @@ export declare const GUIDANCE_ACTIONS: readonly ActionId[]
 
 /** 注入实现与产物入参 */
 export interface ExecuteDeps {
-  /** 系统分享 / 平台分享入口 */
+  /** 系统分享 / 平台分享入口（share.system 与 save.album 都走它） */
   share?: (payload: { files?: unknown; url?: string; title?: string; text?: string }) => unknown
   /** 复制链接 */
   copy?: (text: string) => unknown
-  /** 直接下载（save.album）：url 为文件源（files[0] 现造 blob 或 fileUrl），不含页面地址 */
+  /** 直接下载（save.download）：url 为文件源（files[0] 现造 blob 或 fileUrl），不含页面地址 */
   download?: (payload: { url?: string; filename?: string }) => unknown
   /**
    * 「去外部浏览器」引导按钮的注入点。本函数**不会自动调用它**——
@@ -24,7 +24,7 @@ export interface ExecuteDeps {
    */
   openExternal?: () => unknown
   url?: string
-  /** 下载源（save.album）：无 File 时的备用 URL；优先 files[0] */
+  /** 下载源（save.download）：无 File 时的备用 URL；优先 files[0] */
   fileUrl?: string
   files?: unknown
   title?: string

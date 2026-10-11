@@ -11,12 +11,14 @@
 
 /**
  * 动作在方式列表里的默认标签。
- * `save.album` 按产物区分动词（保存图片 / 保存视频）；`preview.longpress` 不再渲染为
- * 按钮（预览层的大图本身可长按），标签保留仅维持续一的动作文案表完整性。
+ * 保存拆两类、标签分别如实：`save.album` = 系统面板保存（「保存图片/视频」，可进相册）；
+ * `save.download` = `a[download]` 下载（「下载图片/视频」，落下载目录）——不得把下载标成「保存」。
+ * `preview.longpress` 不再渲染为按钮（预览层的大图本身可长按），标签保留仅维持续一的动作文案表完整性。
  */
 export const SHEET_LABELS = Object.freeze({
   'share.system': '分享',
   'save.album': '保存图片',
+  'save.download': '下载图片',
   'preview.longpress': '长按保存海报',
   'share.card.wx': '分享到微信',
   'share.card.miniapp': '小程序分享',
@@ -28,6 +30,7 @@ function labelOf(actionId, artifactKind, labels) {
   const override = labels && labels.actions && labels.actions[actionId]
   if (typeof override === 'string' && override.length > 0) return override
   if (actionId === 'save.album' && artifactKind === 'video') return '保存视频'
+  if (actionId === 'save.download' && artifactKind === 'video') return '下载视频'
   return SHEET_LABELS[actionId] || actionId
 }
 

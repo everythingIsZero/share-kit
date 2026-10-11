@@ -4,8 +4,25 @@
 
 import type { ActionId } from './actions'
 
-/** 证据等级（四级，R16） */
-export type EvidenceLevel = '真机实测' | '模拟器或开发者工具' | '仅文档' | '未实测'
+/** 证据来源键（每格 evidence 指向其中之一，可核对来源） */
+export type SourceKey =
+  | 'caniuse'
+  | 'mdn'
+  | 'webviewCg'
+  | 'wechatJssdk'
+  | 'jinlab'
+  | 'caniwebview'
+  | 'chromium'
+  | 'unconditional'
+
+/** 合法证据值：来源键 ∪ {未实测}（R16） */
+export type EvidenceLevel = SourceKey | '未实测'
+
+/** 证据来源单源：来源键 → 可核对说明 */
+export declare const SOURCES: Readonly<Record<SourceKey, string>>
+
+/** 未实测格子的证据值 */
+export declare const UNMEASURED: '未实测'
 
 /** 置信度档位 */
 export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'unknown'
@@ -53,7 +70,7 @@ export declare const ENV_KEYS: readonly EnvKey[]
 /** 拼环境键 */
 export declare function envKey(container: string, os: string): EnvKey
 
-/** 能力表：环境键 → 六项动作的取值（42 格） */
+/** 能力表：环境键 → 七项动作的取值（42 格） */
 export declare const CAPABILITY_TABLE: Readonly<Record<EnvKey, Readonly<Record<ActionId, CapabilityCell>>>>
 
 /** 由指纹取环境键（维度缺失落 unknown 档） */

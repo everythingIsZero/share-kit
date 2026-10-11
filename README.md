@@ -31,7 +31,7 @@ bun add github:everythingIsZero/share-kit
 | `normalizeFingerprint(signals)` | 原始信号 → 脱敏指纹（container / os / engine / versionBand / unknown） |
 | `decideAction({ fingerprint, artifactKind, signals })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作） |
 | `listActions({ fingerprint, artifactKind, signals })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序） |
-| `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 六动作，带证据等级） |
+| `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 七动作，每格带可核对的证据来源键 `SOURCES`） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
 | `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果分类（成功 / 取消 / 阻断 / 失败 / **引导**）与反馈计划 |
 | `buildEvent(input)` | 事件对象（固定四字段，UA 原文与身份字段不进事件） |
@@ -149,12 +149,18 @@ artifact.imageUrl = exported.url
 
 | 边界 | 事实 | 你要怎么做 |
 |---|---|---|
-| **`URL.createObjectURL` 内存** | 把视频读成 `File` / `blob` 走对象 URL，整段视频会驻留内存，blob URL 指向的内存**不会自动回收**（本包只在 `save.album` 现造 blob 时延后 `revokeObjectURL`；你自造给 `artifact.files` 的 URL 由你负责释放） | 大视频不要整段读进内存再分享；能用直链就用直链；自造的对象 URL 用完 `URL.revokeObjectURL` |
+| **`URL.createObjectURL` 内存** | 把视频读成 `File` / `blob` 走对象 URL，整段视频会驻留内存，blob URL 指向的内存**不会自动回收**（本包只在 `save.download` 现造 blob 时延后 `revokeObjectURL`；你自造给 `artifact.files` 的 URL 由你负责释放） | 大视频不要整段读进内存再分享；能用直链就用直链；自造的对象 URL 用完 `URL.revokeObjectURL` |
 | **系统分享的体积上限** | `navigator.share({ files: [大视频] })` 各端对文件体积有**上限**（iOS / Android 各不相同），超限会抛错或静默失败；上限随系统版本变，无法可靠预判 | 不要指望系统面板传大视频；大视频优先「复制链接 / 打开外部浏览器」，或让用户下载后在系统里分享 |
 | **微信内视频无前端保存路径** | 微信内置浏览器（iOS / Android）不给 H5 保存视频的前端路径，`a[download]` 也带不动视频 | 微信内视频只给「复制链接，去手机浏览器打开」并如实说明；**不出现「已保存」语义** |
 
-补充：`save.album` 在**桌面**的语义是「存到本机下载目录」，不是「进相册」——本包下载走 `a[download]`，
-落点是**本机文件 / 下载目录**，视频尤其永远进不了相册。相关文案统一说「本机」，不说「相册」。
+补充：本包把「保存」拆成两个动作、落点分别如实——
+
+- **`save.album`（系统面板保存）**：`navigator.share({ files })` → 相册 / 文件。仅当环境支持
+  `canShare({files})` 时入列（iOS / Android 浏览器、装到桌面的 PWA）；文案才可说「相册」。
+- **`save.download`（直接下载）**：`a[download]` → **本机下载目录 / 「文件」**，视频尤其永远进不了相册；
+  桌面浏览器、鸿蒙等无系统面板的环境走它。文案统一说「下载 / 本机」，**不说「相册」**。
+
+二者同一「保存」意图二选一：环境有系统面板就用 `save.album`，否则用 `save.download`——**绝不承诺相册而落下载**。
 
 ## 红线（12 条，违者必改）
 
@@ -163,7 +169,7 @@ artifact.imageUrl = exported.url
 3. **手势内同步调用**：分享接口必须在点击回调的同步段内发出，`await` 只允许出现在调用之后。先 `await` 再调用会烧掉一次性用户激活，iOS 直接 `NotAllowedError`（单测已钉住）。
 4. **反馈落在触发元素本身**：不用 toast、不弹窗；引导层位置按安全区与容器 UI 高度动态算，禁写死坐标。
 5. **不承诺做不到的事**：微信内置浏览器内保存视频无前端路径，只给「复制链接去外部浏览器」并如实说明，不出现「已保存」语义。
-6. **未实测格不给强引导**：能力表 42 格逐格带证据等级；未实测格 `available: null`（不填推测值），决策走中性兜底；仅文档格即便 `available: true` 也 `confidence: 'low'`。
+6. **未实测格不给强引导**：能力表 42 格逐格带**可核对的证据来源键**（`SOURCES`：caniuse / MDN / W3C WebView-CG / 微信官方 / 真机实测）；未实测格 `evidence: '未实测'`、`available: null`（不填推测值），决策走中性兜底；有来源格即便 `available: true` 也 `confidence: 'low'`。
 7. **无权益钩子**：分享结果回调只做归因，不导出任何 grant / reward / claim 入口，不因消费方要求而开。
 8. **事件四字段**：`probe / action / outcome / fingerprint`；UA 原文与任何身份字段不进事件；用户取消（AbortError）与真失败分开归因。
 9. **文案只描述结果与位置**：默认正文禁写系统菜单项名（随微信版本变化必失效）；仅「已验证 + 附原因」的覆盖才允许点出。
@@ -194,7 +200,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，146 条）
+make test       # 跑全部测试（node:test，159 条）
 make lint       # node --check 所有源文件
 ```
 

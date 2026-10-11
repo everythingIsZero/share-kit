@@ -2,9 +2,10 @@
  * actions.d.ts — share-kit core 动作枚举类型（手写声明，与 actions.mjs 同步维护）
  */
 
-/** 动作 id（六项，R2） */
+/** 动作 id（七项，R2）：save.album（系统面板保存）/ save.download（a[download] 下载）分开 */
 export type ActionId =
   | 'save.album'
+  | 'save.download'
   | 'share.system'
   | 'share.card.wx'
   | 'share.card.miniapp'

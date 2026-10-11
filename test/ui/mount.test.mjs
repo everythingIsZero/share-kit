@@ -4,7 +4,7 @@
  * 不引入 jsdom：编排层这条路径只需「挂载 → 点击 → 执行」，用最小 DOM 桩即可，
  * 且能精确观测 executeAction 实际拿到的 deps（这正是 S3 要修的地方）：
  *   - `deps.url` 只作公开分享链，**不再 `|| location.href`**；
- *   - `save.album` 下载走文件源（`files[0]` → `fileUrl`），**不下载页面 HTML**。
+ *   - `save.download` 下载走文件源（`files[0]` → `fileUrl`），**不下载页面 HTML**。
  */
 
 import { test, beforeEach } from 'node:test'
@@ -177,16 +177,16 @@ test('mount：artifact 无 url 时不复制任何东西（不回退 location.hre
   handle.unmount()
 })
 
-test('mount：save.album 下载走文件源 fileUrl，不下载页面 HTML', async () => {
-  setUA('')
+test('mount：save.download 下载走文件源 fileUrl，不下载页面 HTML', async () => {
+  setUA('') // 未知环境 video + 探得 a[download] → 信号兜底落 save.download
   downloaded.length = 0
   const target = makeEl('div')
   const handle = mountShare(target, {
     artifact: { kind: 'video', url: PAGE_URL, fileUrl: 'blob:file', filename: 'v.mp4' },
   })
   fire(target.children[0], 'click') // video 无图 → 弹 Action Sheet
-  const item = findAction(documentStub.body, 'save.album')
-  assert.ok(item, 'sheet 里应有 save.album 项')
+  const item = findAction(documentStub.body, 'save.download')
+  assert.ok(item, 'sheet 里应有 save.download 项（信号兜底走下载，不是 save.album）')
   fire(item, 'click')
   await tick()
   assert.equal(downloaded[0], 'blob:file', '下载源应是文件 fileUrl')
@@ -264,7 +264,8 @@ test('actionUsesShareUrl：只拦用到分享链的动作；share.system 有文�
   }
   assert.equal(actionUsesShareUrl('share.system', []), true, 'share.system 无 files → 用 url → 拦')
   assert.equal(actionUsesShareUrl('share.system', [{ name: 'v.mp4' }]), false, 'share.system 有 files → 用文件 → 不拦')
-  assert.equal(actionUsesShareUrl('save.album', [{}]), false, '下载不用分享链')
+  assert.equal(actionUsesShareUrl('save.album', [{}]), false, '系统面板保存用文件，不用分享链')
+  assert.equal(actionUsesShareUrl('save.download', [{}]), false, '下载不用分享链')
 })
 
 test('mount：非公开链（私有页 / token）不复制、不分享，给如实反馈（不静默）', async () => {
@@ -406,5 +407,48 @@ test('对照：link + 私有 url（无 files）→ share.system 被拦', async (
   } finally {
     nav.share = prevShare
     nav.canShare = prevCanShare
+  }
+})
+
+test('mount：save.album（系统面板保存）走 navigator.share({files})，不报「已保存」', async () => {
+  // iOS Safari image：canShare({files}) 可用 → save.album 入列（系统面板 → 相册/文件）
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1')
+  const nav = globalThis.navigator
+  const prevShare = nav.share
+  const prevCanShare = nav.canShare
+  const prevFile = globalThis.File
+  let sharedWith = null
+  nav.share = (payload) => {
+    sharedWith = payload
+    return Promise.resolve()
+  }
+  nav.canShare = () => true
+  globalThis.File = class File {}
+  try {
+    const file = new globalThis.File()
+    const target = makeEl('div')
+    const handle = mountShare(target, {
+      artifact: {
+        kind: 'image',
+        url: 'https://share.hxym18.com/s/ok',
+        imageUrl: 'https://share.hxym18.com/s/img.png', // 有图 → 弹预览层
+        files: [file],
+      },
+    })
+    fire(target.children[0], 'click') // image + 有图 → 预览层
+    const item = findAction(documentStub.body, 'save.album')
+    assert.ok(item, '预览层里应有 save.album（系统面板保存）')
+    fire(item, 'click')
+    await tick()
+    assert.ok(sharedWith, 'save.album 应调用 navigator.share（系统面板）')
+    assert.equal(sharedWith.files.length, 1, '系统面板保存应传文件')
+    assert.equal(sharedWith.url, undefined, 'save.album 不得混入 url')
+    // 系统面板里发生什么我们不知道（R7）：不得报「已保存到本机」
+    assert.notEqual(target.children[0].textContent, renderCopy('done-saved'))
+    handle.unmount()
+  } finally {
+    nav.share = prevShare
+    nav.canShare = prevCanShare
+    globalThis.File = prevFile
   }
 })
