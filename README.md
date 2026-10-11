@@ -29,8 +29,8 @@ bun add github:everythingIsZero/share-kit
 | 导出 | 说明 |
 |---|---|
 | `normalizeFingerprint(signals)` | 原始信号 → 脱敏指纹（container / os / engine / versionBand / unknown） |
-| `decideAction({ fingerprint, artifactKind, signals })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作） |
-| `listActions({ fingerprint, artifactKind, signals })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序） |
+| `decideAction({ fingerprint, artifactKind, signals, cardShare? })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作）；`cardShare` 为真（url 是带卡片短链）时微信内 link 的事前说明改用 `card-wx-shortlink` |
+| `listActions({ fingerprint, artifactKind, signals, cardShare? })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序）；`cardShare` 不影响列表（动作可用性只看能力表 + 信号） |
 | `signals.hasFiles` | artifact **是否真带文件**（适配包按产物给出）：`save.album` / 带文件的 `share.system` 需 `hasFiles === true` 才入列 |
 | `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 七动作，每格带可核对的证据来源键 `SOURCES`） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
@@ -76,6 +76,7 @@ bun add github:everythingIsZero/share-kit
 |---|---|
 | `mountShare(target, { artifact, labels?, onResult?, publicHosts? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
 | `isPublicShareUrl(url, publicHosts?)` | 判 URL 是否**公开分享链**（host 在公开域内 + 无 `token`/`t`/`access_token` 类 query）；私有页一律 false |
+| `isCardShareUrl(url)` | 判 URL 是否**带卡片的短链**（host 是卡片承载域 `share.hxym18.com` 且本身是公开链）；站点追加的普通公开域不算 |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
 ## 接入
@@ -131,6 +132,7 @@ artifact.files = [new File([exported.blob], 'poster.png', { type: 'image/png' })
 artifact.imageUrl = exported.url
 
 // 4. 分享链接统一 share.hxym18.com/s/<shareId>（复制链接 / 卡片 / 海报二维码同源）
+//    微信内要「链接自带卡片」时，先把短链注册到 share-bridge，见下节「微信卡片」。
 ```
 
 > **分享链校验（S3）**：`mountShare` 只把**公开分享链**交给复制 / 系统分享 / 卡片。
@@ -138,6 +140,41 @@ artifact.imageUrl = exported.url
 > 站点可用 `publicHosts` **追加**自己的公开域，取**并集、不替换**），且不含 `token` / `t` / `access_token` 类敏感 query。
 > 命中非公开链（如把 `location.href` 私有页地址传进来）时**不复制、不分享**，按钮与顶部提示如实告知
 > 「这条链接不是公开分享链」，并通过 `onResult` 回报 `{ ok:false, outcome:'blocked' }`——绝不静默外泄。
+
+### 微信卡片（share.hxym18.com 短链）
+
+微信内 `share.card.wx` 是**引导动作**（不调用任何接口）：卡片长什么样，由**链接目标页**决定。
+要让分享出去的是带卡片的短链，站点分两步做。
+
+**1. 服务端注册短链**（`x-auth-secret` **只在服务端**，绝不进前端 / 不进仓库）：
+
+```bash
+# 站点服务端调用 share-bridge 注册接口
+curl -sS https://share.hxym18.com/api/shares \
+  -H 'content-type: application/json' \
+  -H "x-auth-secret: $SHARE_BRIDGE_SECRET" \
+  -d '{"targetUrl":"https://your-site.hxym18.com/page/123","owner":"your-site","card":{"title":"标题","desc":"描述","thumbUrl":"https://your-site.hxym18.com/cover.png"}}'
+# → 201 { "ok": true, "shareId": "Ab12Cd34Ef" }
+# 公开短链：https://share.hxym18.com/s/<shareId>
+```
+
+约束：`targetUrl` / `thumbUrl` 走白名单（`https` + `hxym18.com` 或 `*.hxym18.com`）；`card.title` 必填。
+
+**2. 把公开短链作为 `artifact.url` 交给 `mountShare`**：
+
+```js
+mountShare(slot, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/Ab12Cd34Ef', title, text } })
+```
+
+卡片来源：中转页的 **og meta（主路径）**——微信 / 社交爬虫 UA 取到带 og 的 HTML；页内 **JS-SDK（尽力）**——
+`updateAppMessageShareData` / `updateTimelineShareData`，依赖公众号 JS 安全域名与签名，失败不影响短链跳转。
+
+share-kit 侧只做两件事：① 认出 host 是 `share.hxym18.com` 的公开短链（`isCardShareUrl`）；
+② 微信内 link 的事前说明与引导 tip 改用 `card-wx-shortlink`（「链接自带卡片：复制后发给微信好友即可（对方看到卡片）」）。
+**没有短链**（普通公开链 / 空 / 私有链）时行为不变：仍是 `card-wx-link`（「点右上角『···』」）或维持非公开链拦截。
+
+> **真机行为待确认（M2-7）**：og 主路径与 JS-SDK 卡片在微信内的实际呈现（标题 / 描述 / 缩略图 / 跳转）**尚未真机实测**；
+> 本节只描述接入口径，不承诺效果。部署前置（DNS、公众号 JS 安全域名加 `share.hxym18.com`）见 `Projects/share-bridge` 的 README。
 
 无需自己写环境分支，也无需处理点击重决策——`mountShare` 内部在点击瞬间重算可用方式列表
 （一次性用户激活只在此刻为 true，系统分享这一刻才能过信号闸），业务侧只管产物与文案。
@@ -210,7 +247,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，165 条）
+make test       # 跑全部测试（node:test，186 条）
 make lint       # node --check 所有源文件
 ```
 

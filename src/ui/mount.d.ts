@@ -42,6 +42,9 @@ export declare const DEFAULT_PUBLIC_HOSTS: readonly string[]
 /** 判 URL 是否公开分享链（host 在允许域内 + 无敏感 query）；私有页/token/非法 URL 一律 false */
 export declare function isPublicShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
 
+/** 判 URL 是否**带卡片的短链**：既是公开分享链、host 又是卡片承载域（当前与默认公开域同域） */
+export declare function isCardShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
+
 /** 该动作是否会用到分享链（url）；share.system 有文件时用文件、不用 url */
 export declare function actionUsesShareUrl(actionId: string, files?: unknown): boolean
 

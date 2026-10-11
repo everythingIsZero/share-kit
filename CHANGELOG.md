@@ -11,6 +11,8 @@
 - **保存语义拆分**：新增动作 `save.download`（`a[download]` → 下载目录）；`save.album` 语义改为**系统面板保存**（`navigator.share({files})` → 相册/文件）。`decide` 偏好序 `save.album` 在前、二选一（有系统面板即不列下载），`SIGNAL_FALLBACK` 改指 `save.download`。
 - 新增能力行 `browser:harmony` / `pwa-standalone:harmony`（鸿蒙 ArkWeb：无 `navigator.share/canShare`，`a[download]` 落下载目录）。
 - 文案 `save-download-image` / `save-download-video`；`save-album-*` 文案改说「相册/文件」。
+- **微信卡片真短链（M2-6）**：core `share-url.mjs` 新增 `CARD_SHARE_HOSTS` / `isCardShareUrl(url)`（零依赖，单源）——认出 host 为 `share.hxym18.com` 的**公开**短链；`share-kit/ui` 运行期与类型同步导出 `isCardShareUrl`。文案新增 `card-wx-shortlink`（与 `card-wx-link` 并列）。
+- core `decide.mjs` 新增 `CARD_SHARE_HINTS` / `resolveHintCopyId(copyId, cardShare)`（带卡片短链的文案替换表单源），`decideAction` / `listActions` 新增**可选**输入 `cardShare`（缺省 = 旧行为）。
 
 ### Changed
 
@@ -22,6 +24,7 @@
 - 图片偏好序：`preview.longpress`（原生直路 → 相册）排在 `save.album` / `save.download` 之前。
 - iOS 图片的事前说明改为长按引导（`longpress-image`），与主推荐一致。
 - `save.album` 的 label / sheet 文案由「本机」改「相册」；`save.download` 用「下载」。
+- **微信内 link + 带卡片短链**：`artifact.url` 是 `share.hxym18.com/s/<shareId>`（由站点服务端注册）时，`share.card.wx` 的事前说明与引导 tip 由 `card-wx-link` 改为 `card-wx-shortlink`（「链接自带卡片：复制后发给微信好友即可」）。`share.card.wx` 仍是 guidance 动作（不调用任何接口），卡片由中转页 og（主）/ JS-SDK（尽力）产出；无短链时路径不变。
 
 ### Fixed
 

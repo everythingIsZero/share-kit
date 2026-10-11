@@ -95,6 +95,18 @@ test('微信内 link 引导文案在表内且不含系统菜单项名（2026-09-
   assert.deepEqual(DEFAULT_MENU_TERM_DENYLIST.filter((w) => entry.text.includes(w)), [])
 })
 
+test('带卡片短链文案与 card-wx-link 并列：各说各的路径，互不覆盖（M2-6）', () => {
+  const plain = getCopy('card-wx-link')
+  const card = getCopy('card-wx-shortlink')
+  assert.ok(card, 'card-wx-shortlink 必须存在——带卡片短链的微信内 link 引导')
+  assert.equal(card.tier, 'pre')
+  assert.notEqual(card.text, plain.text, '两条微信卡片引导不得互相覆盖')
+  // 带卡片路径的关键承诺：链接自带卡片，复制即可；不再走「点右上角」
+  assert.ok(card.text.includes('卡片'), '新文案要说明链接自带卡片')
+  assert.equal(plain.text.includes('卡片'), false, 'card-wx-link 不被覆盖，仍是右上角引导')
+  assert.deepEqual(DEFAULT_MENU_TERM_DENYLIST.filter((w) => card.text.includes(w)), [])
+})
+
 test('两条结果文案齐备：直接保存与复制链接都报得出结果（2026-09-18 首次接入补）', () => {
   for (const id of ['done-saved', 'done-copied']) {
     const entry = getCopy(id)

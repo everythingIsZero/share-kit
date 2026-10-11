@@ -96,6 +96,26 @@ export const NEUTRAL_HINT_IDS = Object.freeze({
 })
 
 /**
+ * 带卡片短链的事前说明**替换表**（M2-6 单源）：`<默认文案 id> → <带卡片短链文案 id>`。
+ *
+ * 触发条件不在本表里判断：调用方（`ui/mount.mjs`）按 `core/share-url.mjs` 的
+ * `isCardShareUrl(url)` 判出 `cardShare` 再传进来——域名单只在 share-url.mjs 一份，
+ * 本表只管「同一个提示位置换哪条文案」。表中没有的 id 原样返回（缺省 = 旧行为）。
+ */
+export const CARD_SHARE_HINTS = Object.freeze({
+  'card-wx-link': 'card-wx-shortlink',
+})
+
+/**
+ * 事前 / 引导文案 id 解析：`cardShare` 为真时按 `CARD_SHARE_HINTS` 替换，否则原样。
+ * `decideAction`（事前说明）与 `ui/mount.mjs`（点按后的引导 tip）共用此单源。
+ */
+export function resolveHintCopyId(copyId, cardShare) {
+  if (cardShare !== true) return copyId
+  return CARD_SHARE_HINTS[copyId] || copyId
+}
+
+/**
  * 产物偏好序：同一环境里可用的动作可能不止一个，按此顺序取第一个。
  *
  * 图片的保存链：`preview.longpress` 排在 `save.album` / `save.download` **之前**——
@@ -192,14 +212,16 @@ function buildParams(copyId, fingerprint) {
 /**
  * 选事前说明：
  * - 未实测 / 未知环境 → 只给中性说明（R16）；
- * - 命中「操作与直觉不一致」环境 → 给该环境该产物的强引导；
+ * - 命中「操作与直觉不一致」环境 → 给该环境该产物的强引导；`cardShare`（url 是带卡片短链）
+ *   为真时按 `CARD_SHARE_HINTS` 把强引导换成「链接自带卡片」那条（单源在 core）；
  * - 其余情况（动作符合直觉）→ 不给事前说明。
  */
-function pickHint(envKey, artifactKind, primary, untested, fingerprint) {
+function pickHint(envKey, artifactKind, primary, untested, fingerprint, cardShare) {
   if (untested) return { tier: 'pre', copyId: NEUTRAL_HINT_IDS[artifactKind], params: {} }
   const strong = PRE_HINTS[`${envKey}|${artifactKind}`]
   if (strong && INTUITIVE_CONFLICT_ENVS.includes(envKey)) {
-    return { tier: 'pre', copyId: strong, params: buildParams(strong, fingerprint) }
+    const copyId = resolveHintCopyId(strong, cardShare)
+    return { tier: 'pre', copyId, params: buildParams(copyId, fingerprint) }
   }
   if (primary === FALLBACK_ACTION) {
     const neutral = NEUTRAL_HINT_IDS[artifactKind]
@@ -288,11 +310,12 @@ function reasonOf(out, gatedByArtifact, gatedBySignal, signalFallbackUsed, untes
 
 /**
  * 决策入口。`fingerprint` 来自 `normalizeFingerprint`，`artifactKind` 为 image / video / link，
- * `signals` 可选（适配包采集的原始信号，用于运行时否决）。
+ * `signals` 可选（适配包采集的原始信号，用于运行时否决），`cardShare` 可选（url 是否**带卡片短链**，
+ * 由调用方按 `isCardShareUrl(url)` 判出；只影响微信内 link 的事前说明，缺省 = 旧行为）。
  * 纯函数：不改入参、无副作用、同输入同输出；非法入参返回兜底计划而不是抛错。
  */
 export function decideAction(input) {
-  const { fingerprint, artifactKind, signals } = input && typeof input === 'object' ? input : {}
+  const { fingerprint, artifactKind, signals, cardShare } = input && typeof input === 'object' ? input : {}
   if (!isArtifactKind(artifactKind)) return neutralPlan(REASON_CODES.noArtifactKind)
 
   const envKey = envKeyFor(fingerprint)
@@ -305,7 +328,7 @@ export function decideAction(input) {
   return {
     primary,
     // 下载是自明的动作，不需要事前说明；也不能拿中性文案（「复制链接…」）冒充它的说明
-    hint: signalFallbackUsed ? null : pickHint(envKey, artifactKind, primary, untested, fingerprint),
+    hint: signalFallbackUsed ? null : pickHint(envKey, artifactKind, primary, untested, fingerprint, cardShare),
     fallback: primary === FALLBACK_ACTION ? null : FALLBACK_ACTION,
     reason: reasonOf(out, gatedByArtifact, gatedBySignal, signalFallbackUsed, untested),
   }
@@ -314,7 +337,8 @@ export function decideAction(input) {
 /**
  * 列出该环境**此刻**真实可用的全部动作（Action Sheet 的决策单源，红线 2）。
  *
- * 输入与 decideAction 相同；输出 `{ actions: [{ id, isPrimary }], reason }`：
+ * 输入与 decideAction 相同（含可选的 `cardShare`：动作可用性只看能力表 + 信号，
+ * `cardShare` 只影响 decideAction 的事前说明，不影响本函数的列表与 reason）；输出 `{ actions: [{ id, isPrimary }], reason }`：
  * - `actions` 按产物偏好序排列，第一项即主推荐（isPrimary: true），其余为次要项；
  * - copy.link 恒在列；若它是唯一项，主推荐落在它身上；
  * - 信号兜底与 decideAction 同口径（能力表全灭 + 运行时探得可下载 → save.download 入列）；

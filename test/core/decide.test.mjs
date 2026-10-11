@@ -466,3 +466,57 @@ test('listActions 纯函数性：同输入同输出、不改入参', () => {
   assert.equal(JSON.stringify(a), JSON.stringify(b))
   assert.deepEqual(fingerprint, fp('wechat', 'ios', 'wkwebview'), '入参不得被改动')
 })
+
+// —— 带卡片短链（M2-6）：url 是 share.hxym18.com/s/<id> 时微信内 link 的引导改文案 ——
+
+test('微信内 link + 带卡片短链（cardShare）：事前说明改用 card-wx-shortlink', () => {
+  for (const key of ['wechat:ios', 'wechat:android', 'wechat-desktop:macos', 'wechat-desktop:windows']) {
+    const [container, os] = key.split(':')
+    const plan = decideAction({ fingerprint: fp(container, os), artifactKind: 'link', cardShare: true })
+    assert.equal(plan.primary, 'share.card.wx', `${key}：仍是引导动作，不会被换成会调用的动作`)
+    assert.equal(plan.hint.copyId, 'card-wx-shortlink', `${key}：带卡片短链应给新文案`)
+    assert.notEqual(plan.hint.copyId, 'card-wx-link', '新文案与旧文案并列，不互相覆盖')
+    assert.equal(getCopy(plan.hint.copyId).tier, 'pre')
+    assert.equal(plan.fallback, FALLBACK_ACTION)
+  }
+})
+
+test('微信内 link 缺省 / cardShare=false：仍是 card-wx-link（additive，缺省 = 旧行为）', () => {
+  const omitted = decideAction({ fingerprint: fp('wechat', 'ios'), artifactKind: 'link' })
+  assert.equal(omitted.hint.copyId, 'card-wx-link')
+  const explicitFalse = decideAction({ fingerprint: fp('wechat', 'ios'), artifactKind: 'link', cardShare: false })
+  assert.equal(explicitFalse.hint.copyId, 'card-wx-link')
+})
+
+test('cardShare 只替换文案，不改动作与其它产物；listActions 不受其影响', () => {
+  // 微信内图片 + cardShare 不应被误判成卡片路径
+  const image = decideAction({ fingerprint: fp('wechat', 'ios'), artifactKind: 'image', cardShare: true })
+  assert.notEqual(image.hint.copyId, 'card-wx-shortlink')
+  assert.equal(image.primary, 'preview.longpress')
+  // 动作可用性只看能力表 + 信号，cardShare 不进列表
+  const plain = listActions({ fingerprint: fp('wechat', 'ios'), artifactKind: 'link' })
+  const card = listActions({ fingerprint: fp('wechat', 'ios'), artifactKind: 'link', cardShare: true })
+  assert.deepEqual(card.actions, plain.actions)
+  assert.equal(card.reason, plain.reason)
+})
+
+test('cardShare 不绕过未实测兜底：未实测环境仍只给中性说明', () => {
+  const plan = decideAction({ fingerprint: fp('douyin', 'harmony', 'unknown'), artifactKind: 'link', cardShare: true })
+  assert.equal(plan.hint.copyId, NEUTRAL_HINT_IDS.link)
+})
+
+test('CARD_SHARE_HINTS 表结构自洽：替换源与目标文案都必须存在（防悬空 id）', async () => {
+  const mod = await import('../../src/core/decide.mjs')
+  assert.ok(mod.CARD_SHARE_HINTS, 'decide.mjs 应导出 CARD_SHARE_HINTS（带卡片短链替换表单源）')
+  for (const [from, to] of Object.entries(mod.CARD_SHARE_HINTS)) {
+    assert.ok(getCopy(from), `替换源文案缺失 ${from}`)
+    assert.ok(getCopy(to), `替换目标文案缺失 ${to}`)
+    assert.notEqual(from, to)
+  }
+})
+test('cardShare 只认严格 true：非布尔真值不触发替换（JS 调用方传字符串不静默走新文案）', async () => {
+  const { resolveHintCopyId } = await import('../../src/core/decide.mjs')
+  assert.equal(resolveHintCopyId('card-wx-link', 'false'), 'card-wx-link')
+  assert.equal(resolveHintCopyId('card-wx-link', 1), 'card-wx-link')
+  assert.equal(resolveHintCopyId('card-wx-link', true), 'card-wx-shortlink')
+})

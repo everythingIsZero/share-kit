@@ -214,11 +214,16 @@ test('mount：deps 为 getter——挂载后补 url 能取到最新值（执行�
   handle.unmount()
 })
 
-test('mount：引导类动作不报「已完成」，按钮显示对应引导文案', async () => {
-  // 微信内 link → share.card.wx（引导类）：点按钮不弹分享面板，给一步引导
+test('mount：引导类动作不报「已完成」，按钮显示对应引导文案（非卡片域 → card-wx-link）', async () => {
+  // 微信内 link → share.card.wx（引导类）：点按钮不弹分享面板，给一步引导。
+  // 这里用**站点追加的普通公开链**（非卡片承载域），走的是既有 card-wx-link 降级路径；
+  // 卡片承载域（share.hxym18.com）走 card-wx-shortlink，见下方专门用例。
   setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
   const target = makeEl('div')
-  const handle = mountShare(target, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/app/1' } })
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://cdn.example.com/s/app/1' },
+    publicHosts: ['cdn.example.com'],
+  })
   fire(target.children[0], 'click') // 打开 Action Sheet
   const item = findAction(documentStub.body, 'share.card.wx')
   assert.ok(item, '微信内 link 的 sheet 里应有 share.card.wx')
@@ -530,10 +535,15 @@ test('share-kit/ui 运行期导出与 README/类型承诺一致：isPublicShareU
   assert.equal(typeof ui.isPublicShareUrl, 'function', '`share-kit/ui` 运行期必须导出 isPublicShareUrl')
   assert.equal(ui.isPublicShareUrl('https://share.hxym18.com/s/1'), true)
   assert.equal(ui.isPublicShareUrl('https://fang.hxym18.com/p?token=s'), false)
+  // M2-6：带卡片短链判定同样进 ui 面（README/类型承诺与运行期一致）
+  assert.equal(typeof ui.isCardShareUrl, 'function', '`share-kit/ui` 运行期必须导出 isCardShareUrl')
+  assert.equal(ui.isCardShareUrl('https://share.hxym18.com/s/1'), true)
+  assert.equal(ui.isCardShareUrl('https://cdn.example.com/s/1'), false)
   assert.equal(typeof ui.mountShare, 'function')
   // 内部常量不再经 `export * from './mount'` 泄漏为 ui 公共 API（与收窄后的 index.d.ts 对齐）
   assert.equal('GUIDANCE_COPY_ID' in ui, false)
   assert.equal('SENSITIVE_QUERY_KEYS' in ui, false)
+  assert.equal('CARD_SHARE_HOSTS' in ui, false)
   assert.equal('actionUsesShareUrl' in ui, false)
 })
 
@@ -558,5 +568,62 @@ test('mount：无下载源的 video 也不列 save.download（未知环境信号
   const handle = mountShare(target, { artifact: { kind: 'video', url: 'https://share.hxym18.com/s/v' } })
   fire(target.children[0], 'click') // video 无图 → Action Sheet
   assert.equal(findAction(documentStub.body, 'save.download'), null, '无下载源不得列 save.download')
+  handle.unmount()
+})
+
+// —— M2-6：微信内 link + 带卡片短链（share.hxym18.com/s/<id>）→ 引导改「链接自带卡片」——
+
+test('mount：微信内 link + 带卡片短链 → 引导文案用 card-wx-shortlink', async () => {
+  // 站点服务端注册短链后把 https://share.hxym18.com/s/<shareId> 作为 artifact.url 传入；
+  // 卡片由中转页 og / JS-SDK 产出，这里只把引导从「点右上角」换成「复制即可」。
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
+  documentStub.body.children = []
+  const target = makeEl('div')
+  const handle = mountShare(target, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/card01' } })
+  fire(target.children[0], 'click') // 打开 Action Sheet
+  const item = findAction(documentStub.body, 'share.card.wx')
+  assert.ok(item, '微信内 link 的 sheet 里应有 share.card.wx（仍是引导动作）')
+  fire(item, 'click')
+  await tick()
+  const expected = renderCopy('card-wx-shortlink')
+  assert.ok(expected.length > 0, 'card-wx-shortlink 必须有正文')
+  assert.equal(target.children[0].textContent, expected, '按钮应显示「链接自带卡片」引导')
+  assert.notEqual(target.children[0].textContent, renderCopy('card-wx-link'), '卡片短链不得再用右上角引导')
+  const tip = findClass(documentStub.body, 'share-kit-tip')
+  assert.ok(tip, '引导类应弹 tip')
+  assert.equal(tip.textContent, expected)
+  assert.notEqual(target.children[0].textContent, '已完成 · 可再试一次', '仍是引导，不报已完成')
+  handle.unmount()
+})
+
+test('mount：微信内 link + 非卡片域公开链 → 仍是 card-wx-link（缺省路径不变）', async () => {
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
+  documentStub.body.children = []
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://cdn.example.com/s/plain' },
+    publicHosts: ['cdn.example.com'],
+  })
+  fire(target.children[0], 'click')
+  const item = findAction(documentStub.body, 'share.card.wx')
+  fire(item, 'click')
+  await tick()
+  assert.equal(target.children[0].textContent, renderCopy('card-wx-link'))
+  assert.notEqual(target.children[0].textContent, renderCopy('card-wx-shortlink'))
+  handle.unmount()
+})
+
+test('mount：微信内 link + 空 url → 现状不变（非公开链拦截，不给任何卡片引导）', async () => {
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
+  documentStub.body.children = []
+  const target = makeEl('div')
+  const handle = mountShare(target, { artifact: { kind: 'link' } }) // 无 url
+  fire(target.children[0], 'click')
+  const item = findAction(documentStub.body, 'share.card.wx')
+  fire(item, 'click')
+  await tick()
+  assert.equal(target.children[0].textContent, renderCopy('fail-private-url'), '空 url 走既有拦截路径')
+  assert.notEqual(target.children[0].textContent, renderCopy('card-wx-shortlink'))
+  assert.notEqual(target.children[0].textContent, renderCopy('card-wx-link'))
   handle.unmount()
 })

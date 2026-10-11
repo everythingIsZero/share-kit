@@ -15,8 +15,8 @@
  * 重算才能拿到含系统分享的完整列表；首帧列表只用于决定按钮文案。
  */
 
-import { listActions, normalizeFingerprint, renderCopy } from '../core/index.mjs'
-import { actionUsesShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
+import { listActions, normalizeFingerprint, renderCopy, resolveHintCopyId } from '../core/index.mjs'
+import { actionUsesShareUrl, isCardShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
 import { collectSignals, executeAction } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
@@ -24,9 +24,9 @@ import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from '.
 /**
  * 公开链策略已下沉到中性模块 `core/share-url.mjs`（`web/execute.mjs` 与 `mount.mjs` 共用同一实现）。
  * 这里 re-export 以防破坏既有导入（测试与消费方曾从 `ui/mount` 取用）。
- * 非 ui 公共出口；`share-kit/ui` 只承诺 `mountShare` + `isPublicShareUrl` + 视图函数。
+ * 非 ui 公共出口；`share-kit/ui` 只承诺 `mountShare` + `isPublicShareUrl` + `isCardShareUrl` + 视图函数。
  */
-export { SENSITIVE_QUERY_KEYS, DEFAULT_PUBLIC_HOSTS, isPublicShareUrl, actionUsesShareUrl } from '../core/share-url.mjs'
+export { SENSITIVE_QUERY_KEYS, DEFAULT_PUBLIC_HOSTS, isPublicShareUrl, isCardShareUrl, actionUsesShareUrl } from '../core/share-url.mjs'
 
 /** 直接下载（save.download）：a[download] 点击（落点是本机下载目录 / 「文件」，非相册） */
 function defaultDownload({ url, filename }) {
@@ -74,6 +74,8 @@ function fileImageUrl(artifact) {
 /**
  * 引导类动作 → 引导文案 id 的映射（S11：tip 按动作选文案，不恒用 `card-wx-link`）。
  * 只做「动作 → core 文案 id」的接线，文案本体单源在 core `copy.mjs`（适配层不硬编码文案）。
+ * M2-6：url 是带卡片短链时，`share.card.wx` 的 tip 经 core `resolveHintCopyId`（`CARD_SHARE_HINTS`）
+ * 换成 `card-wx-shortlink`——替换表单源在 `core/decide.mjs`，域名单单源在 `core/share-url.mjs`。
  * 导出仅供测试断言映射；非包公共出口（`./ui` 不 re-export）。
  */
 export const GUIDANCE_COPY_ID = Object.freeze({
@@ -146,7 +148,9 @@ export function mountShare(target, options = {}) {
 
   function decideNow(signals) {
     const { fingerprint } = normalizeFingerprint(signals)
-    return listActions({ fingerprint, artifactKind: kind, signals })
+    // M2-6：url 是「带卡片短链」（share.hxym18.com/s/<id>）时，微信内 link 的事前说明换文案；
+    // 判定单源在 core/share-url.mjs（isCardShareUrl），此处按 deps.url 的 getter 在执行时取值。
+    return listActions({ fingerprint, artifactKind: kind, signals, cardShare: isCardShareUrl(deps.url, publicHosts) })
   }
 
   // 首帧：只决定按钮文案（激活信号此时尚未发生，列表不可信，不用于执行）
@@ -191,7 +195,8 @@ export function mountShare(target, options = {}) {
       if (result.ok && result.mode === 'guidance') {
         // 引导类动作**不报「已完成」**：卡片由宿主菜单转发、长按由用户完成，界面只说该怎么做。
         // 文案 id 按 result.action 选（wx / miniapp 各自的引导不同），文案本体在 core。
-        const tipText = renderCopy(GUIDANCE_COPY_ID[result.action])
+        // M2-6：url 是带卡片短链时，share.card.wx 的 tip 经 core 单源换成「链接自带卡片」那条。
+        const tipText = renderCopy(resolveHintCopyId(GUIDANCE_COPY_ID[result.action], isCardShareUrl(deps.url, publicHosts)))
         setLabel(tipText || initialLabel)
         if (tipText) showTipBar(tipText)
       } else if (result.ok) {

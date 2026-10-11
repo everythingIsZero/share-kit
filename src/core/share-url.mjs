@@ -6,6 +6,9 @@
  * 闸门因此落在**最低公共层**——任何自组 UI（`core.listActions` + `web.executeAction`）都
  * 自动受控，不经 `mountShare` 也绕不过去。
  *
+ * M2-6：「带卡片的短链」判定（`isCardShareUrl` / `CARD_SHARE_HOSTS`）同在此文件，
+ * 与公开链闸门一样是单源——`core/decide.mjs` 的引导文案分流不重复写域名单。
+ *
  * 本模块不碰宿主对象（只看 URL 字符串），可在 node:test 下完整覆盖。
  */
 
@@ -14,6 +17,17 @@ export const SENSITIVE_QUERY_KEYS = Object.freeze(['token', 't', 'access_token']
 
 /** 默认公开分享域（**恒在**；`publicHosts` 只在其上追加，绝不替换） */
 export const DEFAULT_PUBLIC_HOSTS = Object.freeze(['share.hxym18.com'])
+
+/**
+ * 卡片承载域（M2-6）：`share-bridge` 中转服务的域。站点在服务端注册短链
+ * （`POST https://share.hxym18.com/api/shares`）拿到 `shareId`，公开短链
+ * `https://share.hxym18.com/s/<shareId>` 直接作为 `artifact.url` 交出去——
+ * 卡片由中转页的 og meta（主路径）与 JS-SDK（尽力）产出，share-kit 只负责**认出**它。
+ *
+ * 与 `DEFAULT_PUBLIC_HOSTS` 是两个概念（公开白名单 vs 卡片承载域），当前恰好同域；
+ * 判定的**单源**本就在本文件，别处不得复制这份域名单。
+ */
+export const CARD_SHARE_HOSTS = Object.freeze(['share.hxym18.com'])
 
 /**
  * 判一个 URL 是否**公开分享链**（S3）。仅当同时满足：host 在允许域内、且不含敏感 query。
@@ -41,6 +55,21 @@ export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
     if (SENSITIVE_QUERY_KEYS.includes(key.toLowerCase())) return false
   }
   return true
+}
+
+/**
+ * 判 URL 是否**带卡片的短链**（M2-6）：既要是合法公开分享链（过 `isPublicShareUrl` 的
+ * host + 无敏感 query 双闸），host 又要在**卡片承载域**（`CARD_SHARE_HOSTS`）内。
+ *
+ * 站点追加的普通公开域（`publicHosts`）**不算**卡片短链——那些域没有中转页产卡片，
+ * 微信内 link 仍应走既有的「点右上角『···』」引导。判定只读 URL 字符串，零宿主依赖。
+ *
+ * @param url         待判 URL
+ * @param publicHosts 站点追加的公开域（转发给 `isPublicShareUrl`；卡片域单源在 `CARD_SHARE_HOSTS`，不由此参数扩展）
+ */
+export function isCardShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
+  if (!isPublicShareUrl(url, publicHosts)) return false
+  return CARD_SHARE_HOSTS.includes(new URL(url).hostname)
 }
 
 /**

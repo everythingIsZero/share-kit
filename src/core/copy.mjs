@@ -86,6 +86,10 @@ export const COPY = Object.freeze({
   // 因此只保留 link 变体；曾有的 card-wx-image / card-wx-video / card-miniapp-image 因闸门
   // 永远不可达，2026-09-18 首次真实接入时删除（死条目会让人误以为已覆盖图片场景）。
   'card-wx-link': Object.freeze({ id: 'card-wx-link', text: '点右上角「···」，把这一页发给朋友', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  // M2-6：url 是**带卡片的短链**（share.hxym18.com/s/<id>，share-bridge 中转页产 og / JS-SDK 卡片）
+  // 时，微信内 link 的事前说明改用此条——卡片已随链接带出，用户只需复制转达，不必走右上角菜单。
+  // 与 card-wx-link 并列、各说各的路径，**不得互相覆盖**（选哪条由 decide 的 cardShare 分流）。
+  'card-wx-shortlink': Object.freeze({ id: 'card-wx-shortlink', text: '链接自带卡片：复制后发给微信好友即可（对方看到卡片）', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   // 小程序 web-view 里 H5 调不起原生分享，转发由**宿主小程序自带**的分享菜单负责，故给这一步引导。
   // 与 card-wx-link 分开：两者宿主菜单位置/措辞不同，tip 按动作选文案（S11）。
   // 注：share.card.miniapp 目前在能力表所有行都不可用（暂不可达）；保留此条供未来开放时使用。

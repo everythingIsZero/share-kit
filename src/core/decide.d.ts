@@ -41,6 +41,11 @@ export interface DecideInput {
   artifactKind?: ArtifactKind | null
   /** 适配包采集的原始信号（可选，用于运行时否决） */
   signals?: RawSignals | null
+  /**
+   * url 是否**带卡片短链**（`core/share-url.mjs` 的 `isCardShareUrl(url)` 判出，可选）。
+   * 只影响微信内 link 的事前说明文案（`card-wx-link` → `card-wx-shortlink`）；缺省 = 旧行为。
+   */
+  cardShare?: boolean
 }
 
 export declare const FALLBACK_ACTION: 'copy.link'
@@ -59,6 +64,15 @@ export declare const PRE_HINTS: Readonly<Record<string, string>>
 
 /** 中性说明文案 id（证据不足时唯一允许的提示） */
 export declare const NEUTRAL_HINT_IDS: Readonly<Record<ArtifactKind, string>>
+
+/** 带卡片短链的事前说明替换表：`<默认文案 id> → <带卡片短链文案 id>`（M2-6 单源） */
+export declare const CARD_SHARE_HINTS: Readonly<Record<string, string>>
+
+/**
+ * 事前 / 引导文案 id 解析：`cardShare` 为真时按 `CARD_SHARE_HINTS` 替换，否则原样。
+ * `decideAction`（事前说明）与 `ui/mount.mjs`（点按后的引导 tip）共用此单源。
+ */
+export declare function resolveHintCopyId(copyId: string, cardShare?: boolean): string
 
 /** 产物偏好序 */
 export declare const ARTIFACT_PREFERENCE: Readonly<Record<ArtifactKind, readonly ActionId[]>>
