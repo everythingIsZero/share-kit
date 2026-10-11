@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+## [Unreleased]
+
+## [0.6.0] - 2026-10-11
+
+### Added
+
+- **`@hxym18/share-kit/meta`：分享卡片元信息工厂**（`createShareMetadata` / `describeLength` + 尺寸与长度常量）——把「卡片能否出」的固定规则固化成**默认值**，站点声明一次（origin/siteName/图/图版本），页面只传 `{ path, title, description }`，无需每页重写 og/robots。默认 `og:type=website`、`locale=zh_CN`、`twitter:card=summary_large_image`、`noindex`、图 1200×630；产出普通对象、无 `undefined` 键；装配期与调用期 fail-fast 校验。
+  动机：og 是卡片主路径（见 `knowledge/integration/specs/2026-10-11-share-shortlink-design.md` v3），但默认值/长度口径/绝对化/版本化（平台按 URL 缓存图）这些**规则**不该由每个站手写。
+
 ## [0.5.1] - 2026-10-11
 
 ### Fixed

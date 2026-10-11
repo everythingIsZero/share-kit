@@ -79,6 +79,37 @@ bun add github:everythingIsZero/share-kit
 | `isCardShareUrl(url)` | 判 URL 是否**带卡片的短链**（host 是卡片承载域 `share.hxym18.com` 且本身是公开链）；站点追加的普通公开域不算 |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
+### `share-kit/meta`：分享卡片元信息（默认值 + 覆盖）
+
+卡片能不能出、图能不能抓到，取决于几条**固定规则**（抓取器读目标页 og；图须绝对地址 + 匿名可取；按 URL 缓存；建议 1200×630；分享页 noindex）。本出口把这些固化成默认值，站点**声明一次**，页面**只给内容**：
+
+```ts
+// lib/share-meta.ts —— 每站一个文件，声明一次（不是每页写一遍）
+import { createShareMetadata } from '@hxym18/share-kit/meta'
+export const shareMetadata = createShareMetadata({
+  origin: 'https://fang.hxym18.com',
+  siteName: '房屋出租账本',
+  image: '/og/share-v1.png',
+  imageVersion: 'v1',          // 换图改这里（平台按 URL 缓存 og 图）
+})
+
+// 分享页：只给 path/title/description，其余（og:type/宽度/robots/…）由默认值兜住
+export async function generateMetadata({ params }) {
+  return shareMetadata({ path: `/s/${params.token}`, title, description })
+}
+```
+
+| 导出 | 说明 |
+|---|---|
+| `createShareMetadata({ origin, image, siteName?, imageVersion?, imageWidth?, imageHeight?, imageAlt?, locale?, noindex?, type?, twitterCard? })` | 站点级工厂；装配期校验 `origin`/`image`（缺即抛） |
+| `shareMetadata({ path, title, description?, image?, imageVersion?, noindex?, type?, siteName? })` | 页面级；`path`/`title` 必填，其余覆盖默认 |
+| `describeLength(text)` | 长度体检（title ≤60 / desc ≤160 仅报告，**不截断**） |
+| `OG_IMAGE_WIDTH/HEIGHT`、`OG_TITLE_MAX`、`OG_DESCRIPTION_MAX` | 常量 |
+
+- 默认：`og:type=website`、`locale=zh_CN`、`twitter:card=summary_large_image`、**`noindex`（index/follow 均 false）**、图 1200×630。
+- 产出为**普通对象**（Next `Metadata` 兼容子集），**无 `undefined` 键**、可 JSON 序列化。
+- ⚠️ `og:image` 所在路径必须**匿名可取**（别放登录闸/防盗链后），否则抓取器拿不到图 → 卡片无图。
+
 ### `share-kit/node`（**服务端专用**）：短链注册
 
 M2-6 让 share-kit 能**认出**卡片短链（`isCardShareUrl`）；本出口负责**注册**它——此前每个站都要自己写一遍 HTTP + 判错 + 存映射。

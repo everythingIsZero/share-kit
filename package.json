@@ -1,6 +1,6 @@
 {
   "name": "@hxym18/share-kit",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "跨终端分享 SDK：环境决策（core）+ 浏览器适配（web）+ 海报配置（poster）+ DOM 渲染（render-dom）",
   "type": "module",
   "license": "MIT",
@@ -34,6 +34,11 @@
       "import": "./src/render-dom/index.mjs",
       "default": "./src/render-dom/index.mjs"
     },
+    "./meta": {
+      "types": "./src/meta/index.d.ts",
+      "import": "./src/meta/index.mjs",
+      "default": "./src/meta/index.mjs"
+    },
     "./node": {
       "types": "./src/node/index.d.ts",
       "import": "./src/node/index.mjs",
@@ -55,6 +60,9 @@
     "*": {
       "web": [
         "src/web/index.d.ts"
+      ],
+      "meta": [
+        "src/meta/index.d.ts"
       ],
       "node": [
         "src/node/index.d.ts"
