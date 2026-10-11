@@ -11,10 +11,11 @@
  * 全部合法动作（键即动作 id，键序即枚举序）。
  * shortCode 供 copyId 命名与埋点归类；family 只用于归组（save / share / fallback），不参与决策。
  *
- * 语义提醒：save.album 是「直接保存到本地」，在桌面环境落点是本机下载目录，不真的进相册。
+ * 语义提醒：save.album 是「直接保存到本地」，在桌面环境落点是本机下载目录，不真的进相册；
+ * 故其 label 用「存到本机」不用「存到相册」——`a[download]` 存的视频尤其永远进不了相册。
  */
 export const ACTIONS = Object.freeze({
-  'save.album': Object.freeze({ shortCode: 'save-album', label: '存到相册', family: 'save' }),
+  'save.album': Object.freeze({ shortCode: 'save-album', label: '存到本机', family: 'save' }),
   'share.system': Object.freeze({ shortCode: 'share-system', label: '拉起系统分享面板', family: 'share' }),
   'share.card.wx': Object.freeze({ shortCode: 'card-wx', label: '微信分享卡片', family: 'share' }),
   'share.card.miniapp': Object.freeze({ shortCode: 'card-miniapp', label: '小程序分享', family: 'share' }),

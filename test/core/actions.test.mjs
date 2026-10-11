@@ -27,6 +27,11 @@ test('每个动作都有短码与中文名，且短码不重复', () => {
   assert.equal(new Set(codes).size, codes.length, 'shortCode 必须唯一')
 })
 
+test('save.album 的 label 说「本机」不说「相册」（a[download] 落点是本机文件，非相册）', () => {
+  assert.equal(ACTIONS['save.album'].label, '存到本机')
+  assert.equal(ACTIONS['save.album'].label.includes('相册'), false)
+})
+
 test('产物种类恰为 image / video / link', () => {
   assert.deepEqual([...ARTIFACT_KINDS], ['image', 'video', 'link'])
   assert.equal(isArtifactKind('image'), true)
