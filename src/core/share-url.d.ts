@@ -8,7 +8,13 @@ export declare const DEFAULT_PUBLIC_HOSTS: readonly string[]
 export declare const CARD_SHARE_HOSTS: readonly string[]
 
 /**
- * 判 URL 是否公开分享链（host 在允许域内 + 无敏感 query）；私有页/token/非法 URL/空串一律 false。
+ * 运行时本站 origin 的 host（浏览器里自动合法；Node/SSR 下返回 `''`）。
+ * 分享自己页面是正常行为；跨域 / 短链域仍须显式经 `publicHosts` 声明。
+ */
+export declare function ownOriginHost(): string
+
+/**
+ * 判 URL 是否公开分享链（host 在 默认域 ∪ 本站 origin ∪ publicHosts 内 + 无敏感 query）；私有页/token/非法 URL/空串一律 false。
  * 允许域 = DEFAULT_PUBLIC_HOSTS ∪ publicHosts；敏感键 = SENSITIVE_QUERY_KEYS ∪ sensitiveQueryKeys（两者都只并集追加）。
  */
 export declare function isPublicShareUrl(

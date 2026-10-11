@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [Unreleased]
+
+## [0.5.1] - 2026-10-11
+
+### Fixed
+
+- **分享链判据不再否定「本站自己的分享页」**：允许域从「`share.hxym18.com` ∪ `publicHosts`」改为「默认域 ∪ **本站 origin**（浏览器运行时经 `ownOriginHost()` 自动计入）∪ `publicHosts`」。此前站点自己的公开分享页（如 `fang.hxym18.com/s/<token>`）会被判非公开链、必须靠 `publicHosts` 过渡声明——那是把「缓存/统计前缀门控」误当「分享链有效性」的后果。S3 的根因（`artifact.url || location.href` 回退）已在 0.3.0 移除，本改动不放宽凭证判定：敏感 query 键照拦、跨域仍须显式声明、Node/SSR 下不自动放行。
+- 依据：微信官方 JS-SDK 文档（父域绑定覆盖子域；安全域名不支持短链域名）+ Open Graph 分享实践（卡片主路径 = 目标页 `og:*`）——见 `knowledge/integration/specs/2026-10-11-share-shortlink-design.md`（v3）。
+
 ## [0.5.0] - 2026-10-11
 
 ### Added

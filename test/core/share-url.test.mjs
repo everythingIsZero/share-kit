@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 
 import {
   CARD_SHARE_HOSTS,
+  ownOriginHost,
   DEFAULT_PUBLIC_HOSTS,
   SENSITIVE_QUERY_KEYS,
   isCardShareUrl,
@@ -67,4 +68,22 @@ test('sensitiveQueryKeys 与 publicHosts 同构：默认清单恒在，站点只
 test('isCardShareUrl 同样接受追加敏感键：卡片域带追加键不算卡片短链', () => {
   assert.equal(isCardShareUrl('https://share.hxym18.com/s/1?sig=x'), true, '未追加时既有行为不变')
   assert.equal(isCardShareUrl('https://share.hxym18.com/s/1?sig=x', [], ['sig']), false, '追加 sig 后不算卡片短链')
+})
+
+test('本站 origin 默认合法（分享自己的页面是正常行为）；跨域仍需显式声明', () => {
+  const before = globalThis.location
+  try {
+    globalThis.location = { href: 'https://fang.hxym18.com/s/tok123/room/1' }
+    assert.equal(ownOriginHost(), 'fang.hxym18.com')
+    assert.equal(isPublicShareUrl('https://fang.hxym18.com/s/tok123/room/1'), true, '本站分享页应可交出')
+    assert.equal(isPublicShareUrl('https://fang.hxym18.com/s/tok123?token=x'), false, '凭证 query 仍拦')
+    assert.equal(isPublicShareUrl('https://other.example.com/s/1'), false, '跨域仍拦')
+    assert.equal(isPublicShareUrl('https://other.example.com/s/1', ['other.example.com']), true, '显式声明后放行')
+    globalThis.location = undefined
+    assert.equal(ownOriginHost(), '')
+    assert.equal(isPublicShareUrl('https://fang.hxym18.com/s/tok123/room/1'), false, '无 location（Node/SSR）不得默认放行')
+  } finally {
+    if (before === undefined) delete globalThis.location
+    else globalThis.location = before
+  }
 })

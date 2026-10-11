@@ -41,9 +41,26 @@ export const CARD_SHARE_HOSTS = Object.freeze(['share.hxym18.com'])
  * 只作**追加**（站点自己的 `sig` / `code` 之类私有签名键）；传空数组 / 替换清单都不会关掉默认键。
  *
  * @param url                待判 URL
- * @param publicHosts        站点声明的**追加**公开域列表
+ * @param publicHosts        站点声明的**追加**公开域列表（另有默认域与**本站 origin**，三者只加不减）
  * @param sensitiveQueryKeys 站点声明的**追加**敏感 query 键列表（大小写不敏感；默认键恒在）
  */
+/**
+ * 运行时**本站 origin 的 host**（浏览器里自动合法；Node/SSR 下返回 `''`）。
+ *
+ * 为什么默认带上本站：分享「自己页面」是正常行为——站点自己的分享页（如 `fang.hxym18.com/s/<token>`）
+ * 本就该能交出去。S3 要防的是**误把私有页当分享链**（根因是 `artifact.url || location.href` 回退，
+ * 已移除），不是禁止分享自身域；靠前缀清单否定会把分享页本身也否掉（v1 的病）。
+ * 跨域 / 短链域仍须显式经 `publicHosts` 声明。
+ */
+export function ownOriginHost() {
+  try {
+    if (typeof location === 'undefined' || !location || !location.href) return ''
+    return new URL(location.href).hostname
+  } catch {
+    return ''
+  }
+}
+
 export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS, sensitiveQueryKeys = SENSITIVE_QUERY_KEYS) {
   if (typeof url !== 'string' || url.length === 0) return false
   let parsed
@@ -53,7 +70,8 @@ export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS, sensit
     return false
   }
   const extraHosts = Array.isArray(publicHosts) ? publicHosts.filter((h) => typeof h === 'string' && h.length > 0) : []
-  const hosts = new Set([...DEFAULT_PUBLIC_HOSTS, ...extraHosts])
+  // 默认域 ∪ **本站 origin**（浏览器）∪ 站点追加域；三者只能加不能减
+  const hosts = new Set([...DEFAULT_PUBLIC_HOSTS, ownOriginHost(), ...extraHosts].filter(Boolean))
   if (!hosts.has(parsed.hostname)) return false
   const extraKeys = Array.isArray(sensitiveQueryKeys)
     ? sensitiveQueryKeys.filter((k) => typeof k === 'string' && k.length > 0).map((k) => k.toLowerCase())
