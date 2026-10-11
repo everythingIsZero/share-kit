@@ -140,14 +140,16 @@ test('mount：deps.url 只取 artifact.url（有 url 时复制到的是分享链
   handle.unmount()
 })
 
-test('mount：artifact 无 url 时不回退 location.href，也不复制字面量 "undefined"', async () => {
+test('mount：artifact 无 url 时不复制任何东西（不回退 location.href，也不复制字面量 "undefined"）', async () => {
   copied = null
   const target = makeEl('div')
   const handle = mountShare(target, { artifact: { kind: 'link' } })
   fire(target.children[0], 'click')
   await tick()
-  assert.notEqual(copied, PAGE_URL, '缺 url 不得拿 location.href 顶替')
-  assert.notEqual(copied, 'undefined', '缺 url 不得把 undefined 强转成字面量复制出去')
+  // 真判定：无公开链时 defaultCopy 应静默返回，execCommand/剪贴板**未被调用**（copied 保持 null）。
+  // 若回归到 `artifact.url || location.href`（复制页面地址）或裸传 undefined（复制 "undefined"），
+  // copied 会被写成 PAGE_URL / undefined，"=== null" 即失败。
+  assert.equal(copied, null, '无 url 时不得触发复制（回退 location.href 或复制 undefined 都会让本断言变红）')
   handle.unmount()
 })
 
