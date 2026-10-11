@@ -79,6 +79,43 @@ bun add github:everythingIsZero/share-kit
 | `isCardShareUrl(url)` | 判 URL 是否**带卡片的短链**（host 是卡片承载域 `share.hxym18.com` 且本身是公开链）；站点追加的普通公开域不算 |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
+### `share-kit/node`（**服务端专用**）：短链注册
+
+M2-6 让 share-kit 能**认出**卡片短链（`isCardShareUrl`）；本出口负责**注册**它——此前每个站都要自己写一遍 HTTP + 判错 + 存映射。
+
+```ts
+// 服务端（Node 18+；`AUTH_INTERNAL_SECRET` 只在服务端持有，绝不进前端 bundle）
+import { createShareBridgeClient } from '@hxym18/share-kit/node'
+
+const bridge = createShareBridgeClient({
+  secret: () => process.env.AUTH_INTERNAL_SECRET || '',   // 传函数：每次请求现读 env
+  owner: 'fang',
+})
+
+// 一条分享对应一条短链：命中缓存不重复注册（bridge 当前**无幂等键**，重复调用会生成不同短链）
+const r = await bridge.ensureShortLink({
+  key: share.id,                                  // 站点侧分享标识
+  targetUrl: `https://fang.hxym18.com/s/${share.token}/room/${roomId}`,
+  card: { title, desc, thumbUrl },
+  store: {                                        // 站点侧持久化适配器（各站表/列不同，故注入）
+    get: async (k) => (await db.get('select short_url from share_links where id=?', k))?.short_url ?? null,
+    set: async (k, url) => await db.run('update share_links set short_url=? where id=?', url, k),
+  },
+})
+if (r.ok) artifact.url = r.shortUrl                 // 分享链改用短链 → 微信卡片由中转页产出
+else console.warn('[share] 短链不可用，降级站内链', r.outcome)   // 不阻断业务
+```
+
+| 导出 | 说明 |
+|---|---|
+| `createShareBridgeClient({ secret, owner, baseUrl?, fetchImpl?, timeoutMs? })` | 造客户端；`secret` 可为函数（现读 env）；装配期校验缺参即抛 |
+| `register({ targetUrl, card? })` | 注册一条 → `{ ok:true, shareId, shortUrl }` |
+| `ensureShortLink({ key, targetUrl, card?, store })` | **一条分享一条短链**：命中 `store` 就用缓存，否则注册并写回；失败**不写 store**（不会把坏值缓存住） |
+| `shortUrlFor(shareId)` / `DEFAULT_BRIDGE_BASE` | 拼短链；默认域来自 `core/share-url.mjs` 的 `CARD_SHARE_HOSTS`（单源） |
+
+- **永不抛错**：返回 `{ ok:true, ... } | { ok:false, outcome }`；`outcome ∈ unauthorized / invalid / rate_limited / unavailable / network / bad_response / store_failed`（便于站点降级为站内链）。
+- 已知缺口：bridge 的 `POST /api/shares` **没有幂等键**，同一分享重复注册会得到多条短链——所以用 `ensureShortLink`（站点侧固定映射）。后续若 bridge 支持幂等键，可去掉 `store` 适配器。
+
 ## 接入
 
 ### 先说清楚：SDK 会动你页面的哪里（作用域声明）

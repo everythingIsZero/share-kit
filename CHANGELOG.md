@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [Unreleased]
+
+## [0.5.0] - 2026-10-11
+
+### Added
+
+- **`@hxym18/share-kit/node`（服务端出口）**：`createShareBridgeClient({ secret, owner, baseUrl?, fetchImpl?, timeoutMs? })` —— 短链注册客户端（`register` / `ensureShortLink` / `shortUrlFor`）。此前每个站要自己写 `POST /api/shares` + `x-auth-secret` + 判错 + 存映射；现共享封装，站点只注入一个 `store`（读/写各一次）。
+  - **永不抛错**：返回 `{ ok:true, shareId, shortUrl } | { ok:false, outcome }`；`outcome ∈ unauthorized / invalid / rate_limited / unavailable / network / bad_response / store_failed`。
+  - `ensureShortLink` 保证**一条分享一条短链**（bridge 当前无幂等键，同一 key 重复调用不会产生多条）；注册失败**不写 store**（不缓存坏值）。
+  - `secret` 可为 `() => string`（每次请求现读 env）；`DEFAULT_BRIDGE_BASE` 取自 `core/share-url.mjs` 的 `CARD_SHARE_HOSTS`（单源）。**只在服务端持有密钥**，该出口不进前端 bundle。
+
 ## [0.4.0] - 2026-10-11
 
 ### Added
