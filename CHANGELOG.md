@@ -4,6 +4,28 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-11
+
+### Added
+
+- `isPublicShareUrl` + `mountShare` 非公开链拦截：允许域 = 默认域 `share.hxym18.com` ∪ 站点 `publicHosts`（并集，`publicHosts` 只追加、不替换）；非公开链拒绝复制/分享。
+- artifact 全字段 getter（含新增 `fileUrl`）。
+- `card-miniapp-link` 文案（小程序 webview 引导「点右上角『···』，用小程序自带的分享」）。
+- core `OUTCOME_KINDS` 新增 `guidance`。
+
+### Changed
+
+- **破坏性**：`deps` 字段全部改为 getter（原先直接取值的用法受影响）。
+- **破坏性**：download payload 不再传 `files`（`save.album` 只收 `{ url, filename }`）。
+- **破坏性**：非公开链 / 缺 `url` 的 link 产物会被拦截（不再执行分享/复制）。
+
+### Fixed
+
+- 分享链与文件源分离：`url` 不再回退 `location.href`，新增 `fileUrl`；下载源改用文件（`files[0]` → `fileUrl`），不再把页面 HTML 当下载内容。
+- `save.album` / save 文案与 label 不再承诺「相册」，改「本机」（`a[download]` 落点是下载目录/文件）。
+- 空 `url` 不再复制出 `undefined`（空值守卫）。
+- 引导类动作 outcome 标 `guidance`：不再误报 done，React 端不卡禁用态（复原按钮）。
+
 ## [0.2.1] - 2026-10-08
 
 ### Added
