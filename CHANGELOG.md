@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-11
+
 ### Added
 
 - **能力来源权威化**：`capability-table.mjs` 导出 `SOURCES`（caniuse / MDN / W3C WebView-CG / 微信官方 JS-SDK / 真机实测 / caniwebview / unconditional），每格 `evidence` 由模糊等级改为**来源键**（可核对）；`UNMEASURED` 表示未实测。
@@ -32,6 +34,14 @@
 
 - **下载源为空时不再执行**：`executeAction('save.download')` 在没有 `files[0]`、也没有 `fileUrl` 时拒绝执行（`outcome: 'failed'`），不再把空字符串交给注入实现——空 `a.href` 在真实浏览器解析为当前文档 URL，会把**整页 HTML** 当「图片」下下来。`decide` 侧新增 `signals.hasDownloadSource`（适配包按 artifact 给出）同口径收闸；未传该信号的调用保持旧行为（不闸）。
 - **公开链闸门下移到执行层**：`isPublicShareUrl` / `actionUsesShareUrl` / `DEFAULT_PUBLIC_HOSTS` / `SENSITIVE_QUERY_KEYS` 由 `ui/mount.mjs` 下沉到零依赖的 `src/core/share-url.mjs`（`mount.mjs` 保留 re-export，`share-kit/ui` 运行期补出 `isPublicShareUrl`）。`executeAction` 对「用到分享链」的动作（`copy.link` / 无文件的 `share.system` / `share.card.*`）在 `url` 非公开链或为空时拒绝执行（`outcome: 'blocked'`）——此前闸门只在 `mountShare`，React `ShareTrigger` 与「`listActions` + `executeAction` 自组 UI」直调可绕过，私有页链接仍会被复制/分享。
+
+### Fixed（引擎判定）
+
+- `probe.mjs` 的 `detectEngine` 判定顺序对齐 `@hxym18/env`（iOS 全系先判 `wkwebview`）：修正 **iOS 上的 UC/夸克** 被误判为 `u4`（跨包语料一致性见 `scripts/e2e/env-corpus.test.mjs`）。
+
+### Chore
+
+- 包内**契约副本**声明（`hxym18.contracts`）：`sensitive-prefixes@1`、`share-url-policy@1`、`capability-projection@1`。
 
 ## [0.3.0] - 2026-10-11
 
