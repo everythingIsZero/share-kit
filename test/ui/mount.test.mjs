@@ -333,3 +333,78 @@ test('mount：站点追加公开域（publicHosts）后该域可用，默认域�
   assert.equal(copied, 'https://cdn.example.com/s/1', '追加域应放行')
   handle.unmount()
 })
+
+test('mount：image + files + 私有 url —— share.system 用文件不被误拦（files 接线守护）', async () => {
+  // 桌面浏览器 image：share.system 可用；有 files 时用文件、不用 url，故私有 url 不得拦它
+  setUA('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
+  const nav = globalThis.navigator
+  const prevShare = nav.share
+  const prevCanShare = nav.canShare
+  const prevFile = globalThis.File
+  let sharedWith = null
+  nav.share = (payload) => {
+    sharedWith = payload
+    return Promise.resolve()
+  }
+  nav.canShare = () => true
+  globalThis.File = class File {}
+  try {
+    const file = new globalThis.File()
+    const target = makeEl('div')
+    const handle = mountShare(target, {
+      artifact: {
+        kind: 'image',
+        url: 'https://fang.hxym18.com/private?token=secret', // 私有 url
+        imageUrl: 'https://share.hxym18.com/s/img.png', // 有图 → 弹预览层
+        files: [file],
+      },
+    })
+    fire(target.children[0], 'click') // image + 有图 → 预览层
+    const item = findAction(documentStub.body, 'share.system')
+    assert.ok(item, '预览层里应有 share.system')
+    fire(item, 'click')
+    await tick()
+    assert.ok(sharedWith, 'share.system 应被调用（有文件，不因私有 url 被拦）')
+    assert.equal(sharedWith.files.length, 1, '应传文件')
+    assert.equal(sharedWith.url, undefined, '有文件时不得混入 url')
+    handle.unmount()
+  } finally {
+    nav.share = prevShare
+    nav.canShare = prevCanShare
+    globalThis.File = prevFile
+  }
+})
+
+test('对照：link + 私有 url（无 files）→ share.system 被拦', async () => {
+  // 同上环境，但 link 产物不带文件 → share.system 用 url → 私有 url 必须被拦
+  setUA('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
+  const nav = globalThis.navigator
+  const prevShare = nav.share
+  const prevCanShare = nav.canShare
+  let sharedWith = null
+  nav.share = (payload) => {
+    sharedWith = payload
+    return Promise.resolve()
+  }
+  nav.canShare = () => true
+  const results = []
+  try {
+    const target = makeEl('div')
+    const handle = mountShare(target, {
+      artifact: { kind: 'link', url: 'https://fang.hxym18.com/private?token=secret' },
+      onResult: (r) => results.push(r),
+    })
+    fire(target.children[0], 'click') // link → sheet
+    const item = findAction(documentStub.body, 'share.system')
+    assert.ok(item, 'sheet 里应有 share.system')
+    fire(item, 'click')
+    await tick()
+    assert.equal(sharedWith, null, '私有 url 不得分享')
+    assert.equal(results[0].outcome, 'blocked')
+    assert.equal(results[0].action, 'share.system')
+    handle.unmount()
+  } finally {
+    nav.share = prevShare
+    nav.canShare = prevCanShare
+  }
+})
