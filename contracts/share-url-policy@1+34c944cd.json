@@ -1,0 +1,13 @@
+{
+  "cardShareHosts": [
+    "share.hxym18.com"
+  ],
+  "defaultPublicHosts": [
+    "share.hxym18.com"
+  ],
+  "sensitiveQueryKeys": [
+    "token",
+    "t",
+    "access_token"
+  ]
+}

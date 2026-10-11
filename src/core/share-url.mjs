@@ -37,10 +37,14 @@ export const CARD_SHARE_HOSTS = Object.freeze(['share.hxym18.com'])
  * **允许域 = DEFAULT_PUBLIC_HOSTS ∪ publicHosts**：默认域恒在，`publicHosts` 只作**追加**
  * 的站点公开域（传 `[location.hostname]` 不会关掉默认闸门，也不会放行任意域）。
  *
- * @param url         待判 URL
- * @param publicHosts 站点声明的**追加**公开域列表
+ * **敏感键 = SENSITIVE_QUERY_KEYS ∪ sensitiveQueryKeys**：默认键恒在，`sensitiveQueryKeys`
+ * 只作**追加**（站点自己的 `sig` / `code` 之类私有签名键）；传空数组 / 替换清单都不会关掉默认键。
+ *
+ * @param url                待判 URL
+ * @param publicHosts        站点声明的**追加**公开域列表
+ * @param sensitiveQueryKeys 站点声明的**追加**敏感 query 键列表（大小写不敏感；默认键恒在）
  */
-export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
+export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS, sensitiveQueryKeys = SENSITIVE_QUERY_KEYS) {
   if (typeof url !== 'string' || url.length === 0) return false
   let parsed
   try {
@@ -48,11 +52,15 @@ export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
   } catch {
     return false
   }
-  const extra = Array.isArray(publicHosts) ? publicHosts.filter((h) => typeof h === 'string' && h.length > 0) : []
-  const hosts = new Set([...DEFAULT_PUBLIC_HOSTS, ...extra])
+  const extraHosts = Array.isArray(publicHosts) ? publicHosts.filter((h) => typeof h === 'string' && h.length > 0) : []
+  const hosts = new Set([...DEFAULT_PUBLIC_HOSTS, ...extraHosts])
   if (!hosts.has(parsed.hostname)) return false
+  const extraKeys = Array.isArray(sensitiveQueryKeys)
+    ? sensitiveQueryKeys.filter((k) => typeof k === 'string' && k.length > 0).map((k) => k.toLowerCase())
+    : []
+  const sensitive = new Set([...SENSITIVE_QUERY_KEYS, ...extraKeys])
   for (const key of parsed.searchParams.keys()) {
-    if (SENSITIVE_QUERY_KEYS.includes(key.toLowerCase())) return false
+    if (sensitive.has(key.toLowerCase())) return false
   }
   return true
 }
@@ -64,11 +72,12 @@ export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
  * 站点追加的普通公开域（`publicHosts`）**不算**卡片短链——那些域没有中转页产卡片，
  * 微信内 link 仍应走既有的「点右上角『···』」引导。判定只读 URL 字符串，零宿主依赖。
  *
- * @param url         待判 URL
- * @param publicHosts 站点追加的公开域（转发给 `isPublicShareUrl`；卡片域单源在 `CARD_SHARE_HOSTS`，不由此参数扩展）
+ * @param url                待判 URL
+ * @param publicHosts        站点追加的公开域（转发给 `isPublicShareUrl`；卡片域单源在 `CARD_SHARE_HOSTS`，不由此参数扩展）
+ * @param sensitiveQueryKeys 站点追加的敏感 query 键（转发给 `isPublicShareUrl`；默认键恒在）
  */
-export function isCardShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
-  if (!isPublicShareUrl(url, publicHosts)) return false
+export function isCardShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS, sensitiveQueryKeys = SENSITIVE_QUERY_KEYS) {
+  if (!isPublicShareUrl(url, publicHosts, sensitiveQueryKeys)) return false
   return CARD_SHARE_HOSTS.includes(new URL(url).hostname)
 }
 

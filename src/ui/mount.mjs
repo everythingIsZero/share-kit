@@ -94,21 +94,23 @@ export const GUIDANCE_COPY_ID = Object.freeze({
  *   - `labels`：`{ button?, sheetTitle?, actions?: { <动作id>: 覆盖文案 } }`；
  *   - `onResult(result)`：每次执行后回调（`{ ok, outcome, action, mode }`），供业务埋点上报；
  *   - `publicHosts`：站点声明的公开分享域，**追加**到默认域 `share.hxym18.com` 之上（并集，不替换）；非公开链会被拒绝复制/分享。
+ *   - `sensitiveQueryKeys`：站点声明的**追加**敏感 query 键（如 `sig` / `code`），**追加**到默认 `token`/`t`/`access_token` 之上（并集，不替换）；带这些 query 的链会被拒绝复制/分享。
  * @returns `{ unmount }`
  */
 export function mountShare(target, options = {}) {
   if (!target || typeof target.appendChild !== 'function') {
     throw new TypeError('mountShare(target, options)：target 必须是可挂载的 DOM 节点')
   }
-  const { artifact = {}, labels, onResult, publicHosts } = options
+  const { artifact = {}, labels, onResult, publicHosts, sensitiveQueryKeys } = options
   const kind = artifact.kind
 
   const deps = {
     share: (payload) => navigator.share(payload),
     download: defaultDownload,
     copy: defaultCopy,
-    // S3：站点追加公开域随 deps 交给 executeAction 的闸门（自组 UI / ShareTrigger 也会用到）
+    // S3：站点追加公开域 / 敏感键随 deps 交给 executeAction 的闸门（自组 UI / ShareTrigger 也会用到）
     publicHosts,
+    sensitiveQueryKeys,
     // 全字段**执行时取值**（getter）：业务可先挂载、渲染完成后再补 artifact 字段，点击时取到最新值。
     // S3：url 只作公开分享链，**不再 `|| location.href`**——页面地址可能是私有页（带 token），
     // 落到复制/系统分享即外泄；缺 url 时给空串（绝不 undefined，避免被强转成字面量 "undefined" 复制出去）。
@@ -150,7 +152,7 @@ export function mountShare(target, options = {}) {
     const { fingerprint } = normalizeFingerprint(signals)
     // M2-6：url 是「带卡片短链」（share.hxym18.com/s/<id>）时，微信内 link 的事前说明换文案；
     // 判定单源在 core/share-url.mjs（isCardShareUrl），此处按 deps.url 的 getter 在执行时取值。
-    return listActions({ fingerprint, artifactKind: kind, signals, cardShare: isCardShareUrl(deps.url, publicHosts) })
+    return listActions({ fingerprint, artifactKind: kind, signals, cardShare: isCardShareUrl(deps.url, publicHosts, sensitiveQueryKeys) })
   }
 
   // 首帧：只决定按钮文案（激活信号此时尚未发生，列表不可信，不用于执行）
@@ -180,7 +182,7 @@ export function mountShare(target, options = {}) {
 
   function run(actionId) {
     // S3：非公开链（私有页 / 带 token）不得复制或分享出去——拒绝执行并如实反馈，绝不静默外泄
-    if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, publicHosts)) {
+    if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, publicHosts, sensitiveQueryKeys)) {
       const text = renderCopy('fail-private-url')
       setLabel(text)
       showTipBar(text)
@@ -196,7 +198,7 @@ export function mountShare(target, options = {}) {
         // 引导类动作**不报「已完成」**：卡片由宿主菜单转发、长按由用户完成，界面只说该怎么做。
         // 文案 id 按 result.action 选（wx / miniapp 各自的引导不同），文案本体在 core。
         // M2-6：url 是带卡片短链时，share.card.wx 的 tip 经 core 单源换成「链接自带卡片」那条。
-        const tipText = renderCopy(resolveHintCopyId(GUIDANCE_COPY_ID[result.action], isCardShareUrl(deps.url, publicHosts)))
+        const tipText = renderCopy(resolveHintCopyId(GUIDANCE_COPY_ID[result.action], isCardShareUrl(deps.url, publicHosts, sensitiveQueryKeys)))
         setLabel(tipText || initialLabel)
         if (tipText) showTipBar(tipText)
       } else if (result.ok) {

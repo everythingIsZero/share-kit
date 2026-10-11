@@ -1,4 +1,4 @@
-.PHONY: test lint typecheck demo-bundle demo-verify demo-verify-realworld
+.PHONY: test lint typecheck demo-bundle demo-verify demo-verify-realworld test-download-bytes
 
 # 跑全部测试（node:test，bun test 兼容）
 test:
@@ -24,3 +24,7 @@ demo-verify: demo-bundle
 # 断言环境识别 / 决策 / 长按引导 / 真下载 / 系统分享调用 / 复制 / 移动布局 / jsQR 二维码识读
 demo-verify-realworld:
 	node demo/verify-realworld.mjs
+
+# save.download 字节级端到端验收（G2；本地离线，真浏览器下载 → 落盘 → 读回字节）
+test-download-bytes:
+	node test/e2e/download-bytes.mjs

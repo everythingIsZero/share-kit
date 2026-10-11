@@ -40,10 +40,18 @@ export declare const SENSITIVE_QUERY_KEYS: readonly string[]
 export declare const DEFAULT_PUBLIC_HOSTS: readonly string[]
 
 /** 判 URL 是否公开分享链（host 在允许域内 + 无敏感 query）；私有页/token/非法 URL 一律 false */
-export declare function isPublicShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
+export declare function isPublicShareUrl(
+  url?: string | null,
+  publicHosts?: readonly string[],
+  sensitiveQueryKeys?: readonly string[]
+): boolean
 
 /** 判 URL 是否**带卡片的短链**：既是公开分享链、host 又是卡片承载域（当前与默认公开域同域） */
-export declare function isCardShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
+export declare function isCardShareUrl(
+  url?: string | null,
+  publicHosts?: readonly string[],
+  sensitiveQueryKeys?: readonly string[]
+): boolean
 
 /** 该动作是否会用到分享链（url）；share.system 有文件时用文件、不用 url */
 export declare function actionUsesShareUrl(actionId: string, files?: unknown): boolean
@@ -56,5 +64,7 @@ export function mountShare(
     onResult?: (result: ShareResult) => void
     /** 站点声明的公开分享域，**追加**到默认域（并集，不替换）；非公开链会被拒绝复制/分享 */
     publicHosts?: readonly string[]
+    /** 站点声明的**追加**敏感 query 键（默认 `token`/`t`/`access_token` 恒在，并集追加）；带这些 query 的链会被拒绝复制/分享 */
+    sensitiveQueryKeys?: readonly string[]
   }
 ): ShareHandle

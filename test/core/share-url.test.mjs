@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import {
   CARD_SHARE_HOSTS,
   DEFAULT_PUBLIC_HOSTS,
+  SENSITIVE_QUERY_KEYS,
   isCardShareUrl,
   isPublicShareUrl,
 } from '../../src/core/share-url.mjs'
@@ -39,4 +40,31 @@ test('卡片承载域是 share-url.mjs 的单源常量，且本身也是公开�
 test('isCardShareUrl 不放松公开链闸门：卡片域带敏感 query 也 false', () => {
   assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1?access_token=a'), false)
   assert.equal(isCardShareUrl('https://share.hxym18.com/s/1?access_token=a'), false)
+})
+
+test('sensitiveQueryKeys 与 publicHosts 同构：默认清单恒在，站点只能并集追加', () => {
+  // 默认清单本身是这三键（单源常量）
+  assert.deepEqual([...SENSITIVE_QUERY_KEYS], ['token', 't', 'access_token'])
+
+  // 默认三键恒在：无论追加清单传什么（含空数组 / 非法项），默认键仍被拦
+  for (const q of ['token=1', 't=1', 'access_token=1']) {
+    assert.equal(isPublicShareUrl(`https://share.hxym18.com/s/1?${q}`), false)
+    assert.equal(isPublicShareUrl(`https://share.hxym18.com/s/1?${q}`, [], []), false, '传空追加清单不得关掉默认三键')
+    assert.equal(isPublicShareUrl(`https://share.hxym18.com/s/1?${q}`, [], ['sig']), false, '追加清单不得替换默认三键')
+  }
+
+  // 站点追加 sig：未追加时 ?sig= 属公开（既有行为不变），追加后拦下
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1?sig=x'), true, '未追加 sig 时不得改变既有行为')
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1?sig=x', [], ['sig']), false, '追加 sig 后应拦 ?sig=')
+  // 大小写不敏感（与默认键同口径）
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1?SIG=x', [], ['sig']), false)
+  // 非法追加项被过滤，不影响正常链
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1', [], [null, '', 42, 'sig']), true)
+  // 追加清单不影响 host 闸门
+  assert.equal(isPublicShareUrl('https://evil.com/s/1?sig=x', [], ['sig']), false)
+})
+
+test('isCardShareUrl 同样接受追加敏感键：卡片域带追加键不算卡片短链', () => {
+  assert.equal(isCardShareUrl('https://share.hxym18.com/s/1?sig=x'), true, '未追加时既有行为不变')
+  assert.equal(isCardShareUrl('https://share.hxym18.com/s/1?sig=x', [], ['sig']), false, '追加 sig 后不算卡片短链')
 })

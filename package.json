@@ -48,15 +48,26 @@
   },
   "typesVersions": {
     "*": {
-      "web": ["src/web/index.d.ts"],
-      "web/react": ["src/web/react.d.ts"],
-      "poster": ["src/poster/index.d.ts"],
-      "render-dom": ["src/render-dom/index.d.ts"],
-      "ui": ["src/ui/index.d.ts"]
+      "web": [
+        "src/web/index.d.ts"
+      ],
+      "web/react": [
+        "src/web/react.d.ts"
+      ],
+      "poster": [
+        "src/poster/index.d.ts"
+      ],
+      "render-dom": [
+        "src/render-dom/index.d.ts"
+      ],
+      "ui": [
+        "src/ui/index.d.ts"
+      ]
     }
   },
   "scripts": {
-    "test": "node --test 'test/**/*.test.mjs'"
+    "test": "node --test 'test/**/*.test.mjs'",
+    "test:download-bytes": "node test/e2e/download-bytes.mjs"
   },
   "dependencies": {
     "html2canvas-pro": "^1.5.8",
@@ -72,5 +83,13 @@
   },
   "devDependencies": {
     "jsqr": "^1.4.0"
+  },
+  "hxym18": {
+    "contracts": {
+      "sensitive-prefixes": "1+262b9b7c",
+      "share-url-policy": "1+34c944cd",
+      "capability-projection": "1+8f9e361b",
+      "contracts": "1+189b5717"
+    }
   }
 }

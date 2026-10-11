@@ -195,6 +195,35 @@ test('S3 闸门：deps.publicHosts 追加站点公开域后放行；未声明仍
   assert.equal(blocked.outcome, 'blocked')
 })
 
+test('S3 闸门：deps.sensitiveQueryKeys 追加敏感键后拦 ?sig=；未追加不改既有行为，默认三键仍在', async () => {
+  const url = 'https://share.hxym18.com/s/1?sig=abc'
+  // 未追加 sig：按现有行为放行（本用例锚定「追加不做替换、也不改变未追加时的行为」）
+  let seen = null
+  const ok = await executeAction('copy.link', { url, copy: (t) => { seen = t } })
+  assert.equal(seen, url, '未追加 sig 时不得改变既有放行行为')
+  assert.equal(ok.ok, true)
+
+  // 追加 sig：带 sig 的链被拦，注入实现不被调用
+  let called = 0
+  const blocked = await executeAction('copy.link', {
+    url,
+    sensitiveQueryKeys: ['sig'],
+    copy: () => { called += 1 },
+  })
+  assert.equal(called, 0, '追加 sig 后不得复制带 sig 的链')
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.outcome, 'blocked')
+
+  // 追加 sig 不放松默认三键：token 仍被拦（追加是并集，不替换）
+  const stillBlocked = await executeAction('copy.link', {
+    url: 'https://share.hxym18.com/s/1?token=s',
+    sensitiveQueryKeys: ['sig'],
+    copy: () => { called += 1 },
+  })
+  assert.equal(called, 0)
+  assert.equal(stillBlocked.outcome, 'blocked', '追加清单不得替换默认三键')
+})
+
 test('save.download 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', async () => {
   const revoked = []
   const orig = URL.revokeObjectURL

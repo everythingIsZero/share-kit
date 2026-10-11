@@ -30,6 +30,10 @@ export interface ExecuteDeps {
   title?: string
   text?: string
   filename?: string
+  /** 站点声明的公开分享域，**追加**到默认域（并集，不替换） */
+  publicHosts?: readonly string[]
+  /** 站点声明的**追加**敏感 query 键（默认 `token`/`t`/`access_token` 恒在，并集追加） */
+  sensitiveQueryKeys?: readonly string[]
 }
 
 /** 执行结果 */

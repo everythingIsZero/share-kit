@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>save.download 字节级验收页</title>
+</head>
+<body>
+  <!-- G2 验收页：mountShare 挂真实 fixture File，点击「下载」走真实 a[download] 落盘 -->
+  <div id="slot"></div>
+  <script type="module">
+    import { mountShare } from '/src/ui/index.mjs'
+
+    // 本地 fixture（同源 HTTP 取回，转成真实 File，交给 artifact.files）
+    const res = await fetch('/test/fixtures/download-fixture.png')
+    const blob = await res.blob()
+    const file = new File([blob], 'download-fixture.png', { type: 'image/png' })
+
+    const artifact = {
+      kind: 'image',
+      url: 'https://share.hxym18.com/s/e2e',
+      filename: 'download-fixture.png',
+      files: [file],
+      imageUrl: URL.createObjectURL(file),
+    }
+
+    mountShare(document.getElementById('slot'), {
+      artifact,
+      labels: { button: '下载' },
+      onResult: (r) => { window.__lastResult = r },
+    })
+
+    // 供验收脚本读取：fixture 字节数（用于和落盘字节比对）
+    window.__fixture = { bytes: blob.size }
+  </script>
+</body>
+</html>

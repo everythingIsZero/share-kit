@@ -13,6 +13,8 @@
 - 文案 `save-download-image` / `save-download-video`；`save-album-*` 文案改说「相册/文件」。
 - **微信卡片真短链（M2-6）**：core `share-url.mjs` 新增 `CARD_SHARE_HOSTS` / `isCardShareUrl(url)`（零依赖，单源）——认出 host 为 `share.hxym18.com` 的**公开**短链；`share-kit/ui` 运行期与类型同步导出 `isCardShareUrl`。文案新增 `card-wx-shortlink`（与 `card-wx-link` 并列）。
 - core `decide.mjs` 新增 `CARD_SHARE_HINTS` / `resolveHintCopyId(copyId, cardShare)`（带卡片短链的文案替换表单源），`decideAction` / `listActions` 新增**可选**输入 `cardShare`（缺省 = 旧行为）。
+- **站点可追加敏感 query 键（G11）**：`isPublicShareUrl` / `isCardShareUrl` 新增第三参 `sensitiveQueryKeys`，`executeAction` 的 `deps.sensitiveQueryKeys` 与 `mountShare` 的 `options.sensitiveQueryKeys` 同步支持。语义与 `publicHosts` **完全对称**：默认清单 `token` / `t` / `access_token` **恒在**，站点只做**并集追加**（不可替换/删减），大小写不敏感。此前 `?sig=` / `?code=` 之类站点私有签名键会漏判为公开链。
+- **`save.download` 字节级端到端验收（G2）**：新增本地离线脚本 `test/e2e/download-bytes.mjs`（`make test-download-bytes`）——真浏览器（Playwright headless）点击下载 → `a[download]` 落盘 → 读回字节，断言 PNG magic、尺寸（8×8）与 fixture **逐字节相等**，排除「下到整页 HTML」。Playwright 仅作本机工具，不进 `dependencies`。
 
 ### Changed
 

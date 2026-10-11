@@ -347,6 +347,35 @@ test('mount：站点追加公开域（publicHosts）后该域可用，默认域�
   handle.unmount()
 })
 
+test('mount：站点追加敏感键（sensitiveQueryKeys）后带该 query 的链被拦，默认三键仍拦', async () => {
+  setUA('')
+  copied = null
+  // 未追加 sig：既有行为（放行）
+  const okTarget = makeEl('div')
+  const okHandle = mountShare(okTarget, {
+    artifact: { kind: 'link', url: 'https://share.hxym18.com/s/1?sig=x' },
+  })
+  fire(okTarget.children[0], 'click')
+  await tick()
+  assert.equal(copied, 'https://share.hxym18.com/s/1?sig=x', '未追加 sig 时不得改变既有行为')
+  okHandle.unmount()
+
+  // 追加 sig：带 sig 的链被拦，不复制
+  copied = null
+  const blockedTarget = makeEl('div')
+  const results = []
+  const blockedHandle = mountShare(blockedTarget, {
+    artifact: { kind: 'link', url: 'https://share.hxym18.com/s/1?sig=x' },
+    sensitiveQueryKeys: ['sig'],
+    onResult: (r) => results.push(r),
+  })
+  fire(blockedTarget.children[0], 'click')
+  await tick()
+  assert.equal(copied, null, '追加 sig 后带 sig 的链不得复制')
+  assert.equal(results[0].outcome, 'blocked')
+  blockedHandle.unmount()
+})
+
 test('mount：image + files + 私有 url —— share.system 用文件不被误拦（files 接线守护）', async () => {
   // 桌面浏览器 image：share.system 可用；有 files 时用文件、不用 url，故私有 url 不得拦它
   setUA('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')

@@ -52,7 +52,7 @@ function invoke(actionId, deps) {
   // S3：动作用到分享链（url）却拿不到公开分享链时**拒绝执行**——绝不把私有页 / 带 token 的地址
   // 复制、系统分享或写进微信卡片。闸门必须落在最低公共层：自组 UI（`listActions` + `executeAction`）
   // 与 React `ShareTrigger` 都直接走本函数，从而自动受控，不经 `mountShare` 也绕不过去。
-  if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, deps.publicHosts)) {
+  if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, deps.publicHosts, deps.sensitiveQueryKeys)) {
     const error = new Error('非公开分享链：拒绝执行（S3）')
     // 复用 classifyOutcome 的既有语义（NotAllowedError → blocked），不新增 outcome 种类
     error.name = 'NotAllowedError'
@@ -107,14 +107,15 @@ function toResult(actionId, error) {
 }
 
 /**
- * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, fileUrl, files, title, text, publicHosts }`。
+ * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, fileUrl, files, title, text, publicHosts, sensitiveQueryKeys }`。
  *
  * `openExternal` 是「去外部浏览器」引导按钮的注入点：本函数**不会自动调用它**——
  * 自动跳浏览器会打断用户，是否提供这一步由调用方接线。
  *
  * S3 闸门（最低公共层）：用到分享链的动作（`copy.link` / `share.card.wx` / `share.card.miniapp` /
  * 无 files 的 `share.system`）在 `url` 不是公开分享链时**不调用注入实现**，直接返回
- * `{ ok:false, outcome:'blocked' }`（`NotAllowedError` 语义）。`publicHosts` 可**追加**站点公开域。
+ * `{ ok:false, outcome:'blocked' }`（`NotAllowedError` 语义）。`publicHosts` 可**追加**站点公开域；
+ * `sensitiveQueryKeys` 可**追加**站点敏感 query 键（默认 `token`/`t`/`access_token` 恒在，只并集追加）。
  *
  * 返回 `{ ok, outcome, action, mode }`；`mode` 为 'invoked'（调用了注入实现）或 'guidance'（只给引导）。
  */

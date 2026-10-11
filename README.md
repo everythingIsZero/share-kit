@@ -74,8 +74,8 @@ bun add github:everythingIsZero/share-kit
 
 | 导出 | 说明 |
 |---|---|
-| `mountShare(target, { artifact, labels?, onResult?, publicHosts? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
-| `isPublicShareUrl(url, publicHosts?)` | 判 URL 是否**公开分享链**（host 在公开域内 + 无 `token`/`t`/`access_token` 类 query）；私有页一律 false |
+| `mountShare(target, { artifact, labels?, onResult?, publicHosts?, sensitiveQueryKeys? })` | 挂载分享按钮 + 海报预览层 + Action Sheet 兜底 + 执行 + 反馈，返回 `{ unmount }` |
+| `isPublicShareUrl(url, publicHosts?, sensitiveQueryKeys?)` | 判 URL 是否**公开分享链**（host 在公开域内 + 无 `token`/`t`/`access_token` 及站点追加的敏感 query 键）；私有页一律 false |
 | `isCardShareUrl(url)` | 判 URL 是否**带卡片的短链**（host 是卡片承载域 `share.hxym18.com` 且本身是公开链）；站点追加的普通公开域不算 |
 | `SHEET_LABELS` / `sheetItemsOf` / `buttonLabelOf` / `sheetTitleOf` | Action Sheet 视图模型（纯函数，自定义 UI 时可复用） |
 
@@ -136,8 +136,9 @@ artifact.imageUrl = exported.url
 ```
 
 > **分享链校验（S3）**：`mountShare` 只把**公开分享链**交给复制 / 系统分享 / 卡片。
-> 判断口径是 `isPublicShareUrl(url, publicHosts?)`——host 必须在公开域内（默认 `share.hxym18.com` **恒在**；
-> 站点可用 `publicHosts` **追加**自己的公开域，取**并集、不替换**），且不含 `token` / `t` / `access_token` 类敏感 query。
+> 判断口径是 `isPublicShareUrl(url, publicHosts?, sensitiveQueryKeys?)`——host 必须在公开域内（默认 `share.hxym18.com` **恒在**；
+> 站点可用 `publicHosts` **追加**自己的公开域，取**并集、不替换**），且不含 `token` / `t` / `access_token` 类敏感 query
+> （站点可用 `sensitiveQueryKeys` **追加**自己的敏感键，如 `sig` / `code`，同样是**并集、不替换**——默认键恒在）。
 > 命中非公开链（如把 `location.href` 私有页地址传进来）时**不复制、不分享**，按钮与顶部提示如实告知
 > 「这条链接不是公开分享链」，并通过 `onResult` 回报 `{ ok:false, outcome:'blocked' }`——绝不静默外泄。
 
@@ -247,9 +248,25 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，186 条）
+make test       # 跑全部测试（node:test，191 条）
 make lint       # node --check 所有源文件
 ```
+
+### 本地检查（需真浏览器，不进 CI）
+
+`make test` 是纯 node:test，不开浏览器。下面两条**字节级 / 真机**检查用本机 Playwright + Chromium，
+离线可跑（不依赖线上），按改动类型在合并前跑：
+
+```bash
+make test-download-bytes   # save.download 字节级验收：真浏览器触发下载、文件落盘、读回字节
+make demo-verify           # render-dom 海报视觉验收：canvas 尺寸 / 二维码像素 / 微信铁律
+```
+
+- `make test-download-bytes`（脚本 `test/e2e/download-bytes.mjs`）：起本地静态服务 + 本地 fixture
+  `test/fixtures/download-fixture.png`，用真实 Playwright 点击「下载」→ 浏览器把 `a[download]` 落盘 →
+  读回字节，断言 ① PNG magic `89 50 4E 47 0D 0A 1A 0A`、② 尺寸 8×8、③ 与 fixture **逐字节相等**
+  （排除「下到整页 HTML」）。Playwright 取自本机（依次尝试 `PLAYWRIGHT_PATH` 环境变量 / `playwright` 包 /
+  本机全局安装）；未装浏览器时脚本报错退出，不伪造通过。
 
 ### 锁文件与依赖纪律
 
