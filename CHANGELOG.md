@@ -6,7 +6,8 @@
 
 ### Added
 
-- **能力来源权威化**：`capability-table.mjs` 导出 `SOURCES`（caniuse / MDN / W3C WebView-CG / 微信官方 JS-SDK / 真机实测 / caniwebview / chromium / unconditional），每格 `evidence` 由模糊等级改为**来源键**（可核对）；`UNMEASURED` 表示未实测。
+- **能力来源权威化**：`capability-table.mjs` 导出 `SOURCES`（caniuse / MDN / W3C WebView-CG / 微信官方 JS-SDK / 真机实测 / caniwebview / unconditional），每格 `evidence` 由模糊等级改为**来源键**（可核对）；`UNMEASURED` 表示未实测。
+- **`signals.hasFiles`**（适配包按 artifact 给出）：`save.album` / 带文件的 `share.system` 需 `hasFiles === true` 才入列。
 - **保存语义拆分**：新增动作 `save.download`（`a[download]` → 下载目录）；`save.album` 语义改为**系统面板保存**（`navigator.share({files})` → 相册/文件）。`decide` 偏好序 `save.album` 在前、二选一（有系统面板即不列下载），`SIGNAL_FALLBACK` 改指 `save.download`。
 - 新增能力行 `browser:harmony` / `pwa-standalone:harmony`（鸿蒙 ArkWeb：无 `navigator.share/canShare`，`a[download]` 落下载目录）。
 - 文案 `save-download-image` / `save-download-video`；`save-album-*` 文案改说「相册/文件」。
@@ -15,6 +16,10 @@
 
 - **破坏性**：`ACTION_IDS` 由六项变七项；`save.album` 的 `a[download]` 语义迁到 `save.download`（`ACTION_DEP_MAP`：`save.album`→`share`、`save.download`→`download`）。既有把 `save.album` 当下载用的接线需改为 `save.download`。
 - **破坏性**：微信 Android（XWeb）`preview.longpress` 由 `true` 修正为 `false`（长按保存失败，jinlab 实测）。
+- **破坏性**：`executeAction('save.album')` 无 `files` 时直接返回失败（不再静默发文本分享）。
+- **同机制去重**：`save.album` 与带文件的 `share.system` 属同一系统面板机制，图片 / 视频只保留 `save.album`、link 只保留 `share.system`（不再同现，红线 2）。
+- 图片偏好序：`preview.longpress`（原生直路 → 相册）排在 `save.album` / `save.download` 之前。
+- iOS 图片的事前说明改为长按引导（`longpress-image`），与主推荐一致。
 - `save.album` 的 label / sheet 文案由「本机」改「相册」；`save.download` 用「下载」。
 
 ## [0.3.0] - 2026-10-11

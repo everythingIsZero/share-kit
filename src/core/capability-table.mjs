@@ -33,8 +33,7 @@ export const SOURCES = Object.freeze({
   webviewCg: 'W3C WebView Community Group browser-compat-data：ArkWeb（鸿蒙）等 WebView 能力实测',
   wechatJssdk: '微信官方 JS-SDK 文档：自定义分享卡片（updateAppMessageShareData 等）',
   jinlab: 'jinlab 真机实测：微信 iOS / Android 分享与长按保存行为',
-  caniwebview: 'caniwebview.com：Android WebView 不暴露 Web Share API（须降级）',
-  chromium: 'Chromium bug 765923：Android WebView 不暴露 navigator.share',
+  caniwebview: 'caniwebview.com：Android WebView 不暴露 Web Share API（须降级；Chromium bug 765923 同此）',
   unconditional: '设计不变量：复制链接不依赖任何宿主能力，任何环境都能兜底（R10）',
 })
 
@@ -83,7 +82,7 @@ function cell(available, source) {
  * 微信内置浏览器（wechat）：App 层屏蔽资源下载（非 API 缺失），图片唯一可靠路径是长按；
  *   视频没有前端保存路径；JS-SDK 只能预设卡片、点击仍由用户手动。
  *   iOS 长按可保存图片（jinlab 实测）；Android（XWeb）长按保存**失败**（jinlab 实测），
- *   Android WebView 亦不暴露 navigator.share（caniwebview / chromium 765923）。
+ *   Android WebView 亦不暴露 navigator.share（caniwebview / Chromium bug 765923）。
  * PC 微信（wechat-desktop）：无长按、无系统分享面板；卡片可用；长按类动作一律不可用（AE2）。
  *   `save.album` / `save.download` 均无可靠文档 → 留未实测，是否真能存下来由运行时信号兜底
  *   （`decide.mjs` 的信号兜底：探得到 a[download] 才走下载，探不到仍退回复制链接）。

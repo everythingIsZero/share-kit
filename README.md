@@ -31,6 +31,7 @@ bun add github:everythingIsZero/share-kit
 | `normalizeFingerprint(signals)` | 原始信号 → 脱敏指纹（container / os / engine / versionBand / unknown） |
 | `decideAction({ fingerprint, artifactKind, signals })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作） |
 | `listActions({ fingerprint, artifactKind, signals })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序） |
+| `signals.hasFiles` | artifact **是否真带文件**（适配包按产物给出）：`save.album` / 带文件的 `share.system` 需 `hasFiles === true` 才入列 |
 | `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 七动作，每格带可核对的证据来源键 `SOURCES`） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
 | `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果分类（成功 / 取消 / 阻断 / 失败 / **引导**）与反馈计划 |
@@ -156,11 +157,17 @@ artifact.imageUrl = exported.url
 补充：本包把「保存」拆成两个动作、落点分别如实——
 
 - **`save.album`（系统面板保存）**：`navigator.share({ files })` → 相册 / 文件。仅当环境支持
-  `canShare({files})` 时入列（iOS / Android 浏览器、装到桌面的 PWA）；文案才可说「相册」。
+  `canShare({files})` **且 artifact 真带 `files`**（`signals.hasFiles`）时入列；文案才可说「相册」。
 - **`save.download`（直接下载）**：`a[download]` → **本机下载目录 / 「文件」**，视频尤其永远进不了相册；
   桌面浏览器、鸿蒙等无系统面板的环境走它。文案统一说「下载 / 本机」，**不说「相册」**。
 
-二者同一「保存」意图二选一：环境有系统面板就用 `save.album`，否则用 `save.download`——**绝不承诺相册而落下载**。
+两条约束（红线 2「一环境一组真实可用的方式」）：
+
+- **同机制去重**：`save.album` 与**带文件**的 `share.system` 都调系统面板分享，属同一机制——图片 / 视频
+  只保留保存意图的 `save.album`（label「保存图片 / 视频」），link 只保留 `share.system`，二者**不得同现**。
+- **保存二选一 + files 守卫**：环境有系统面板就用 `save.album`，否则用 `save.download`（绝不承诺相册而落下载）；
+  `hasFiles` 不是 `true` 时（含只探测到 `canShareFiles`）不列带文件的动作——`canShareFiles` 只是能力探测，
+  不代表真有文件，否则会「点保存却发文本分享」（`executeAction('save.album')` 无 files 直接返回失败）。
 
 ## 红线（12 条，违者必改）
 
@@ -200,7 +207,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，159 条）
+make test       # 跑全部测试（node:test，164 条）
 make lint       # node --check 所有源文件
 ```
 

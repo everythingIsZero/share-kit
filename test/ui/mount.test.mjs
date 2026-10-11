@@ -452,3 +452,26 @@ test('mount：save.album（系统面板保存）走 navigator.share({files})，�
     globalThis.File = prevFile
   }
 })
+
+test('mount：image 无 files 时预览层不列 save.album / share.system（files 守卫接线守护）', async () => {
+  // iOS Safari image 但 artifact 无 files：canShare 探测为 true 也不得凭它合成「有文件」
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1')
+  const nav = globalThis.navigator
+  const prevShare = nav.share
+  const prevCanShare = nav.canShare
+  nav.share = () => Promise.resolve()
+  nav.canShare = () => true
+  try {
+    const target = makeEl('div')
+    const handle = mountShare(target, {
+      artifact: { kind: 'image', url: 'https://share.hxym18.com/s/ok', imageUrl: 'https://share.hxym18.com/s/img.png' }, // 无 files
+    })
+    fire(target.children[0], 'click') // image + 有图 → 预览层
+    assert.equal(findAction(documentStub.body, 'save.album'), null, '无 files 不得列 save.album')
+    assert.equal(findAction(documentStub.body, 'share.system'), null, '无 files 不得列带文件的 share.system')
+    handle.unmount()
+  } finally {
+    nav.share = prevShare
+    nav.canShare = prevCanShare
+  }
+})

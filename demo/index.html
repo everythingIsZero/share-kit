@@ -86,7 +86,9 @@
     const status = document.getElementById('status')
 
     // ── 环境决策（页面加载即采集首帧；列表供环境卡展示与验收断言） ──────────
-    const signals = collectSignals()
+    // hasFiles: 本 demo 的海报会作为 File 交给 artifact（render 后补齐），故声明「真带文件」；
+    // save.album / 带文件的 share.system 需 hasFiles 才入列（canShareFiles 只是能力探测）。
+    const signals = { ...collectSignals(), hasFiles: true }
     // normalizeFingerprint 返回 { fingerprint, signals } 包装——决策要传解构出的四维指纹
     const { fingerprint } = normalizeFingerprint(signals)
     const plan = decideAction({ fingerprint, artifactKind: 'image', signals })
@@ -151,7 +153,7 @@
     matrix.innerHTML = ENV_PREVIEW.map((env) => {
       const [container, os] = env.keys[0].split(':')
       const fp = { container, os, engine: 'unknown', versionBand: 'unknown' }
-      const list = listActions({ fingerprint: fp, artifactKind: 'image', signals: env.signals })
+      const list = listActions({ fingerprint: fp, artifactKind: 'image', signals: { hasFiles: true, ...env.signals } })
       const items = sheetItemsOf(list, 'image', null)
       // 统一预览层形态：点击先弹海报大图，方式收进层内（长按保存即大图本身，不占按钮位）
       const layerItems = items.filter((it) => it.id !== 'preview.longpress')

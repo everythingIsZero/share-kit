@@ -27,11 +27,15 @@ function fp(container, os, engine = 'unknown') {
   return { container, os, engine, versionBand: 'unknown', unknown: [] }
 }
 
-test('iOS Safari 且产物是图片：primary=share.system，且带事前说明', () => {
-  const plan = decideAction({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image' })
-  assert.equal(plan.primary, 'share.system')
-  assert.ok(plan.hint, 'iOS 上分享面板还要再选一次，必须给事前说明')
-  assert.equal(plan.hint.copyId, 'share-system-image')
+test('iOS Safari 图片（带文件）：primary=preview.longpress（原生直路），带长按事前说明', () => {
+  const plan = decideAction({
+    fingerprint: fp('browser', 'ios', 'wkwebview'),
+    artifactKind: 'image',
+    signals: { canShareFiles: true, hasTransientActivation: true, hasFiles: true },
+  })
+  assert.equal(plan.primary, 'preview.longpress')
+  assert.ok(plan.hint, '长按不是显而易见，必须给事前说明')
+  assert.equal(plan.hint.copyId, 'longpress-image')
   assert.equal(plan.hint.tier, 'pre')
   assert.equal(plan.reason, REASON_CODES.primaryAvailable)
   assert.equal(plan.fallback, FALLBACK_ACTION)
@@ -89,10 +93,11 @@ test('未知环境：primary=copy.link，提示为中性文案且不含禁用词
 })
 
 test('非微信浏览器且可分享文件：primary=share.system', () => {
+  // 桌面 save.album=false（无系统面板保存），带文件的 share.system 仍可用（canShareFiles + hasFiles）
   const withSignal = decideAction({
     fingerprint: fp('browser', 'macos', 'blink'),
     artifactKind: 'image',
-    signals: { canShareFiles: true },
+    signals: { canShareFiles: true, hasFiles: true },
   })
   assert.equal(withSignal.primary, 'share.system')
 
@@ -138,16 +143,20 @@ test('信号闸按产物区分：canShareFiles=false 只闸带文件的产物，
   assert.equal(noShare.reason, REASON_CODES.signalGated)
 })
 
-test('iOS 装到桌面的 PWA 且产物是图片：唯一动作 share.system，提示按本环境给', () => {
-  const plan = decideAction({ fingerprint: fp('pwa-standalone', 'ios', 'wkwebview'), artifactKind: 'image' })
-  assert.equal(plan.primary, 'share.system')
-  assert.equal(plan.hint.copyId, 'share-system-image')
+test('iOS 装到桌面的 PWA 图片（带文件）：primary=preview.longpress，提示按本环境给', () => {
+  const plan = decideAction({
+    fingerprint: fp('pwa-standalone', 'ios', 'wkwebview'),
+    artifactKind: 'image',
+    signals: { canShareFiles: true, hasTransientActivation: true, hasFiles: true },
+  })
+  assert.equal(plan.primary, 'preview.longpress')
+  assert.equal(plan.hint.copyId, 'longpress-image')
   assert.equal(INTUITIVE_CONFLICT_ENVS.includes('pwa-standalone:ios'), true)
 
   // 不照搬微信内与桌面浏览器：桌面点一下就好，不需要事前说明
   const wechat = decideAction({ fingerprint: fp('wechat', 'ios', 'wkwebview'), artifactKind: 'image' })
   const desktop = decideAction({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'image' })
-  assert.notEqual(plan.hint.copyId, wechat.hint.copyId)
+  assert.equal(plan.hint.copyId, wechat.hint.copyId, '同为长按引导')
   assert.equal(desktop.hint, null, '桌面浏览器操作符合直觉，不该给事前说明')
   assert.equal(desktop.reason, REASON_CODES.primaryAvailable)
 })
@@ -180,7 +189,7 @@ test('纯函数性：同输入两次输出相等，两次调用互不影响', ()
   assert.deepEqual(fingerprint, fp('wechat', 'ios', 'wkwebview'), '入参不得被改动')
 })
 
-test('表结构自洽：偏好序覆盖六项动作、闸表与提示表里的动作与文案都存在', () => {
+test('表结构自洽：偏好序覆盖七项动作、闸表与提示表里的动作与文案都存在', () => {
   const known = new Set(Object.keys(ACTIONS))
   for (const [kind, order] of Object.entries(ARTIFACT_PREFERENCE)) {
     assert.equal(order[order.length - 1], FALLBACK_ACTION, `${kind} 的偏好序必须以兜底动作收尾`)
@@ -294,8 +303,8 @@ test('PC 微信的 save.download 不得被判成确定不可用（「无相册�
 
 // —— listActions（Action Sheet 决策单源，红线 2）——
 
-/** 点击瞬间的信号形态：一次性用户激活已发生、特性探测已可做 */
-const CLICK_SIGNALS = { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true }
+/** 点击瞬间的信号形态：一次性用户激活已发生、特性探测已可做、artifact 真带文件 */
+const CLICK_SIGNALS = { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true, hasFiles: true }
 
 test('listActions 与 decideAction 永远一致：主推荐 = decideAction 的 primary', () => {
   const cases = [
@@ -317,13 +326,44 @@ test('listActions 与 decideAction 永远一致：主推荐 = decideAction 的 p
   }
 })
 
-test('iOS 浏览器图片·点击瞬间：[系统分享(主), 查看大图, 保存图片, 复制链接]（长按先于下载）', () => {
+test('iOS 浏览器图片·点击瞬间：[查看大图(主), 保存图片, 复制链接]（同机制去重 + 保存二选一）', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK_SIGNALS })
-  // save.album（系统面板 → 相册/文件）在 iOS 可用；save.download 被「保存二选一」抑制；
+  // 系统面板机制只保留 save.album（不列同机制的 share.system）；save.download 被保存二选一抑制；
   // preview.longpress（原生直路 → 相册）排在保存链之前
-  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'preview.longpress', 'save.album', 'copy.link'])
+  assert.deepEqual(list.actions.map((a) => a.id), ['preview.longpress', 'save.album', 'copy.link'])
   assert.equal(list.actions[0].isPrimary, true)
+  assert.equal(list.actions.some((a) => a.id === 'share.system'), false, '同机制：save.album 在列即不列 share.system')
   assert.equal(list.actions.some((a) => a.id === 'save.download'), false, '有系统面板保存时不再列下载')
+})
+
+test('同机制去重：image 不同现 save.album 与 share.system；link 保留 share.system', () => {
+  // iOS image：save.album 与 share.system 都可用 → 只留 save.album
+  const image = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK_SIGNALS })
+  const imageIds = image.actions.map((a) => a.id)
+  assert.equal(imageIds.includes('save.album'), true)
+  assert.equal(imageIds.includes('share.system'), false, '同一系统面板机制不得以两个动作名同现')
+  // video 同理
+  const video = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'video', signals: CLICK_SIGNALS })
+  assert.equal(video.actions.map((a) => a.id).includes('save.album'), true)
+  assert.equal(video.actions.map((a) => a.id).includes('share.system'), false)
+  // link：无 save.album（链接无「存到本地」语义）→ 保留 share.system
+  const link = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'link', signals: CLICK_SIGNALS })
+  assert.deepEqual(link.actions.map((a) => a.id), ['share.system', 'copy.link'])
+})
+
+test('files 守卫：无 files 时 image/video 不列 save.album / share.system，只留 save.download / copy.link', () => {
+  const noFiles = { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true, hasFiles: false }
+  const image = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: noFiles })
+  const ids = image.actions.map((a) => a.id)
+  assert.equal(ids.includes('save.album'), false, '无 files 不得列 save.album（杜绝「点保存却发文本分享」）')
+  assert.equal(ids.includes('share.system'), false, '无 files 不得列带文件的 share.system')
+  assert.ok(ids.includes('save.download') || ids.includes('copy.link'))
+  // 未提供 hasFiles（默认非 true）同样不列——能力探测 canShareFiles 不能替代「有文件」
+  const image2 = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: { canShareFiles: true, hasTransientActivation: true } })
+  assert.equal(image2.actions.map((a) => a.id).includes('save.album'), false)
+  // link 不带文件：share.system 仍可用
+  const link = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'link', signals: noFiles })
+  assert.equal(link.actions.map((a) => a.id).includes('share.system'), true, 'link 用 url，不受 files 守卫')
 })
 
 test('图片偏好序：preview.longpress 先于 save.download（iOS a[download] 落文件，长按才是进相册的直路）', () => {

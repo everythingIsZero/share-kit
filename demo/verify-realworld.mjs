@@ -180,13 +180,14 @@ const SCENARIOS = [
     },
   },
   {
-    name: 'Android Chrome+分享',
+    name: 'Android Chrome+系统面板保存',
     ua: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
     expect: { container: 'browser', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', firstList: 'preview.longpress,save.download,copy.link' },
     init: () => {
-      // stub 系统分享：canShareFiles 探测过 → 点击瞬间（transient 激活）share.system 入列成为主推荐；
-      // 同时记录 url 是否混入——分享图就是图，url 混传会让 iOS 面板把链接当主体
+      // stub 系统分享：canShareFiles 探测过 + demo 带 files → 点击瞬间（transient 激活）
+      // 系统面板机制以 save.album（保存意图）入列（同机制的 share.system 被去重）；
+      // 同时记录 url 是否混入——保存图就是图，url 混传会让 iOS 面板把链接当主体
       navigator.canShare = () => true
       navigator.share = (d) => {
         const f = d.files && d.files[0]
@@ -196,13 +197,13 @@ const SCENARIOS = [
     },
     async interact(page) {
       const layer = await openPreview(page)
-      // 点击瞬间（已激活）：系统分享 + 系统面板保存（save.album）+ 复制；长按项不渲染按钮
-      checkLayer('Android Chrome', layer, [{ action: 'share.system', primary: true }, { action: 'save.album', primary: false }, { action: 'copy.link', primary: false }])
-      await page.click('.share-kit-preview-btn[data-action="share.system"]')
+      // 点击瞬间（已激活）：系统面板保存（save.album）+ 复制；长按项不渲染按钮，同机制 share.system 去重
+      checkLayer('Android Chrome', layer, [{ action: 'save.album', primary: false }, { action: 'copy.link', primary: false }])
+      await page.click('.share-kit-preview-btn[data-action="save.album"]')
       await page.waitForFunction(() => window.__shareCalled, null, { timeout: 10000 })
       const called = await page.evaluate(() => window.__shareCalled)
-      check('[Android Chrome] 层内点「分享」：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
-      check('[Android Chrome] 分享只传图不带 url（图是主体）', called && called.url === null, JSON.stringify(called && called.url))
+      check('[Android Chrome] 层内点「保存图片」：收到 PNG 文件', called && called.name === 'share-kit-poster.png' && called.type === 'image/png', JSON.stringify(called))
+      check('[Android Chrome] 系统面板保存只传图不带 url（图是主体）', called && called.url === null, JSON.stringify(called && called.url))
     },
   },
   {

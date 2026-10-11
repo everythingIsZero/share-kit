@@ -51,8 +51,14 @@ function invoke(actionId, deps) {
   const fn = deps[depKey]
   if (typeof fn !== 'function') throw new TypeError(`动作 ${actionId} 缺少注入实现：${depKey}`)
   if (depKey === 'share') {
-    // save.album 是「系统面板保存」：只带文件，缺文件时也**不得**拿 url 顶替（那会变成分享链接）
-    if (actionId === 'save.album') return fn({ files: deps.files, title: deps.title, text: deps.text })
+    // save.album 是「系统面板保存」：**必须带文件**；缺文件时直接失败，绝不拿 url 顶替
+    // （否则就是「点保存却发文本分享」，与决策层的 files 守卫同口径）。
+    if (actionId === 'save.album') {
+      if (!deps.files || deps.files.length === 0) {
+        throw new TypeError('save.album 需要 files（系统面板保存不带文件即无效，拒绝静默发文本）')
+      }
+      return fn({ files: deps.files, title: deps.title, text: deps.text })
+    }
     // 有文件产物时只传 files 不传 url：混传会让 iOS 系统面板 / 微信把链接当主体、图片沦为配角
     if (deps.files && deps.files.length > 0) return fn({ files: deps.files, title: deps.title, text: deps.text })
     return fn({ url: deps.url, title: deps.title, text: deps.text })

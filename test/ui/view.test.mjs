@@ -13,16 +13,17 @@ function fp(container, os, engine = 'unknown') {
   return { container, os, engine, versionBand: 'unknown', unknown: [] }
 }
 
-const CLICK = { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true }
+const CLICK = { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true, hasFiles: true }
 
 test('sheetItemsOf：项数据带标签与主推荐标记，保持偏好序', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK })
   const items = sheetItemsOf(list, 'image')
-  // 图片保存链：长按先于系统面板保存；save.download 因 save.album 已在列而被二选一抑制
-  assert.deepEqual(items.map((i) => i.id), ['share.system', 'preview.longpress', 'save.album', 'copy.link'])
+  // 同机制去重：系统面板只留 save.album（不列 share.system）；save.download 被保存二选一抑制；
+  // 长按（原生直路）排最前
+  assert.deepEqual(items.map((i) => i.id), ['preview.longpress', 'save.album', 'copy.link'])
   assert.deepEqual(
     items.map((i) => i.label),
-    ['分享', '长按保存海报', '保存图片', '复制链接']
+    ['长按保存海报', '保存图片', '复制链接']
   )
   assert.equal(items[0].isPrimary, true)
   assert.equal(items.filter((i) => i.isPrimary).length, 1)
@@ -44,9 +45,9 @@ test('保存两动作标签分别如实：save.album「保存图片/视频」，
 
 test('labels.actions 覆盖项文案，labels.button 覆盖多项时的按钮文案', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK })
-  const labels = { button: '分享海报', actions: { 'share.system': '更多方式' } }
+  const labels = { button: '分享海报', actions: { 'save.album': '存到相册' } }
   const items = sheetItemsOf(list, 'image', labels)
-  assert.equal(items.find((i) => i.id === 'share.system').label, '更多方式')
+  assert.equal(items.find((i) => i.id === 'save.album').label, '存到相册')
   assert.equal(items.find((i) => i.id === 'copy.link').label, '复制链接', '未覆盖的用默认')
   assert.equal(buttonLabelOf(list, 'image', labels), '分享海报')
 })

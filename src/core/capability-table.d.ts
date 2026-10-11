@@ -12,7 +12,6 @@ export type SourceKey =
   | 'wechatJssdk'
   | 'jinlab'
   | 'caniwebview'
-  | 'chromium'
   | 'unconditional'
 
 /** 合法证据值：来源键 ∪ {未实测}（R16） */

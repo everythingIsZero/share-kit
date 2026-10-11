@@ -80,9 +80,11 @@ export const PRE_HINTS = Object.freeze({
   'wechat:android|link': 'card-wx-link',
   'wechat-desktop:macos|link': 'card-wx-link',
   'wechat-desktop:windows|link': 'card-wx-link',
-  'browser:ios|image': 'share-system-image',
+  // iOS 图片：长按（原生直路 → 相册）是主推荐，且长按非显而易见 → 出事前说明给长按引导；
+  // 系统面板保存（save.album）仍是可用项，但不再抢主推荐（2026-10-11 去重 + 长按置前后改）。
+  'browser:ios|image': 'longpress-image',
   'browser:ios|video': 'share-system-video',
-  'pwa-standalone:ios|image': 'share-system-image',
+  'pwa-standalone:ios|image': 'longpress-image',
   'pwa-standalone:ios|video': 'share-system-video',
 })
 
@@ -95,16 +97,19 @@ export const NEUTRAL_HINT_IDS = Object.freeze({
 
 /**
  * 产物偏好序：同一环境里可用的动作可能不止一个，按此顺序取第一个。
- * 系统分享面板排在保存之前——它是唯一「既能存又能分享」的统一出口。
  *
  * 图片的保存链：`preview.longpress` 排在 `save.album` / `save.download` **之前**——
  * iOS 上长按图片是**原生直路**（进相册），而 `a[download]` 落「文件」App、不进相册；
  * 故长按可用时不得让下载压过长按。保存链顺序：长按（相册）→ 系统面板保存（相册/文件）
  * → 直接下载（下载目录）。
+ *
+ * `save.album` 与 `share.system`（带文件时）是**同一机制**（都调系统面板分享），
+ * 图片 / 视频把该机制呈现为保存意图的 `save.album`（见 availableActions 的同机制去重）；
+ * 偏好序里 `save.album` 排在 `share.system` 之前，link 产物则只保留 `share.system`。
  */
 export const ARTIFACT_PREFERENCE = Object.freeze({
-  image: Object.freeze(['share.system', 'preview.longpress', 'save.album', 'save.download', 'share.card.wx', 'copy.link']),
-  video: Object.freeze(['share.system', 'save.album', 'save.download', 'share.card.wx', 'copy.link']),
+  image: Object.freeze(['preview.longpress', 'save.album', 'share.system', 'save.download', 'share.card.wx', 'copy.link']),
+  video: Object.freeze(['save.album', 'share.system', 'save.download', 'share.card.wx', 'copy.link']),
   link: Object.freeze(['share.system', 'share.card.wx', 'share.card.miniapp', 'copy.link']),
 })
 
@@ -130,20 +135,29 @@ export const ARTIFACT_ACTION_GATES = Object.freeze({
  *   桌面 Chrome 文件分享探否但链接分享本可用，不得过杀
  *   （2026-10-05 修复：此前无差别闸掉了 link 的系统分享，与能力表 browser 桌面行矛盾）。
  *
- * `save.album`（系统面板保存）与 share.system 一样走系统分享接口（带文件），故同受
+ * `save.album`（系统面板保存）与带文件的 `share.system` 一样走系统分享接口，故同受
  * 「一次性激活 + 接口存在 + 能带文件」三闸；`save.download`（a[download]）只依赖下载属性。
+ *
+ * files 守卫（重要）：带文件的动作（`save.album`、非 link 的 `share.system`）必须
+ * `hasFiles === true` 才入列——`canShareFiles` 只是**能力探测**（合成一个探针文件），
+ * 不代表 artifact 真带文件；缺 files 时入列会导致「点保存却发文本分享」（share({url})）。
+ * `hasFiles` 由适配包按 artifact 实际内容给出（见 `mountShare` / `RawSignals.hasFiles`）。
  */
 function signalsAllow(actionId, signals, artifactKind) {
   const s = signals && typeof signals === 'object' ? signals : {}
   if (actionId === 'share.system') {
     if (s.hasTransientActivation === false) return false
     if (s.hasShare === false) return false
-    if (s.canShareFiles === false && artifactKind !== 'link') return false
+    if (artifactKind !== 'link') {
+      if (s.canShareFiles === false) return false
+      if (s.hasFiles !== true) return false
+    }
   }
   if (actionId === 'save.album') {
     if (s.hasTransientActivation === false) return false
     if (s.hasShare === false) return false
     if (s.canShareFiles === false) return false
+    if (s.hasFiles !== true) return false
   }
   if (actionId === 'save.download' && s.hasDownloadAttr === false) return false
   return true
@@ -202,6 +216,9 @@ function neutralPlan(reason) {
  *
  * 三重过滤：能力表（isAvailable）× 产物闸（artifactAllows）× 信号闸（signalsAllow）；
  * 无条件动作（copy.link）跳过三闸恒入列，因此返回列表永不为空。
+ * 同机制去重：`save.album` 与带文件的 `share.system` 都调系统面板分享，**只保留其一**
+ * （偏好序里 `save.album` 在前 → image/video 保留保存意图的 `save.album`，不列 `share.system`；
+ * link 产物无 `save.album`，故保留 `share.system`）。同时入列违红线 2「一环境一组真实可用的方式」。
  * 保存二选一：`save.album`（系统面板）已入列时不再列 `save.download`（a[download]）——
  * 同一「保存」意图的两条机制，有面板就用面板（能进相册），否则才用下载。
  * 信号兜底口径与 decideAction 原实现一致：能力表给不出比 copy.link 更强的动作、
@@ -218,6 +235,8 @@ function availableActions(artifactKind, row, signals) {
       out.push(actionId)
       continue
     }
+    // 同机制去重：save.album 已入列则跳过同机制的 share.system（偏好序里 album 在前）
+    if (actionId === 'share.system' && out.includes('save.album')) continue
     // 保存二选一：save.album 已入列则跳过 save.download（偏好序里 album 在前，此处必已处理）
     if (actionId === 'save.download' && out.includes('save.album')) continue
     if (!isAvailable(row[actionId])) continue

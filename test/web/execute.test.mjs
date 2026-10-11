@@ -166,9 +166,9 @@ test('save.download 用 fileUrl 时不释放对象 URL（所有权归调用方�
   }
 })
 
-test('save.album 走系统面板：注入 share 收到 files；缺文件也不拿 url 顶替', async () => {
+test('save.album 走系统面板：有 files 才调 share（只带文件）；无 files 直接失败，绝不发文本', async () => {
   let seen = null
-  await executeAction('save.album', {
+  const ok = await executeAction('save.album', {
     url: 'https://page/private?token=x',
     files: [{ name: 'p.png' }],
     share: (d) => {
@@ -176,19 +176,22 @@ test('save.album 走系统面板：注入 share 收到 files；缺文件也不�
       return Promise.resolve()
     },
   })
+  assert.equal(ok.ok, true)
   assert.equal(seen.files.length, 1, 'save.album 用文件（系统面板保存）')
   assert.equal(seen.url, undefined, 'save.album 是文件保存，绝不带 url')
 
-  let bare = null
-  await executeAction('save.album', {
+  // 无 files：直接失败，不静默发文本分享（与决策层 files 守卫同口径）
+  let called = false
+  const bare = await executeAction('save.album', {
     url: 'https://page/private?token=x',
-    share: (d) => {
-      bare = d
+    share: () => {
+      called = true
       return Promise.resolve()
     },
   })
-  assert.equal(bare.url, undefined, '缺 files 时也不得退化成分享链接')
-  assert.equal(bare.files, undefined)
+  assert.equal(called, false, '无 files 不得调用 share')
+  assert.equal(bare.ok, false)
+  assert.equal(bare.outcome, 'failed')
 })
 
 test('ACTION_DEP_MAP：save.album → share（系统面板），save.download → download（a[download]）', () => {

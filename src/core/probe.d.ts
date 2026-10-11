@@ -26,6 +26,12 @@ export interface RawSignals {
   hasStandaloneDisplayMode?: boolean
   hasDownloadAttr?: boolean
   hasTransientActivation?: boolean | 'unknown'
+  /**
+   * artifact 是否**真带文件**（适配包按实际产物给出，不是环境探测）。
+   * `save.album` 与非 link 的 `share.system` 需 `hasFiles === true` 才入列——
+   * `canShareFiles` 只是能力探测，不能替代「有文件」。
+   */
+  hasFiles?: boolean
 }
 
 /** 归一结果：脱敏指纹（进事件）+ 原始信号回显（不进事件） */

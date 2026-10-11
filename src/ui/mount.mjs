@@ -164,13 +164,19 @@ export function mountShare(target, options = {}) {
     },
   }
 
+  // 采集环境信号 + artifact 是否真带 files：save.album / 带文件的 share.system 必须真带 files 才入列
+  // （canShareFiles 只是能力探测；无 files 时只剩 save.download / copy.link，杜绝「点保存却发文本分享」）。
+  function collectNow() {
+    return { ...collectSignals(), hasFiles: !!(deps.files && deps.files.length > 0) }
+  }
+
   function decideNow(signals) {
     const { fingerprint } = normalizeFingerprint(signals)
     return listActions({ fingerprint, artifactKind: kind, signals })
   }
 
   // 首帧：只决定按钮文案（激活信号此时尚未发生，列表不可信，不用于执行）
-  const firstList = decideNow(collectSignals())
+  const firstList = decideNow(collectNow())
   const initialLabel = buttonLabelOf(firstList, kind, labels)
   ensureStyles()
   const button = document.createElement('button')
@@ -256,7 +262,7 @@ export function mountShare(target, options = {}) {
   function handleClick() {
     if (disposed) return
     // 点击瞬间重决策（同步纯函数，不烧激活）：一次性用户激活只在此刻为 true
-    const list = decideNow(collectSignals())
+    const list = decideNow(collectNow())
     // 图是基本操作：图片产物先弹海报预览层，方式收进层内（出资人拍板，不再先弹无图列表）
     if (kind === 'image' && fileImageUrl(artifact)) {
       openPreview(list)

@@ -34,7 +34,7 @@ test('环境键是有限清单：恰为 7 × 6 = 42 格，且不含 engine / ver
   for (const key of ENV_KEYS) {
     assert.equal(key.includes('engine'), false)
     assert.equal(key.includes('versionBand'), false)
-    // 每格都必须对六项动作给值（缺依据也要成格）
+    // 每格都必须对七项动作给值（缺依据也要成格）
     assert.equal(Object.keys(CAPABILITY_TABLE[key]).length, ACTION_IDS.length)
   }
 })
@@ -164,12 +164,13 @@ test('item 2：Android Chrome save.album / save.download 明确可用（系统�
   assert.equal(row['share.system'].available, true)
 })
 
-test('保存语义拆分的表结构：save.album 与 save.download 是两格、证据各自独立', () => {
-  for (const key of ENV_KEYS) {
+test('保存语义拆分：save.album 与 save.download 可用性相互独立（不是同一格）', () => {
+  // 有判定力：全表必须存在二者可用性不同的环境——若把 download 绑死成 album 的同值，本断言失败
+  const separable = ENV_KEYS.filter((key) => {
     const row = CAPABILITY_TABLE[key]
-    assert.ok(row['save.album'], `${key} 缺 save.album 格`)
-    assert.ok(row['save.download'], `${key} 缺 save.download 格`)
-  }
+    return row['save.album'].available !== row['save.download'].available
+  })
+  assert.ok(separable.length > 0, '必须存在 save.album 与 save.download 可用性不同的环境（否则拆分无意义）')
   // 桌面浏览器：无系统面板保存（canShare files 不支持），但下载可用——两者必须分开
   for (const key of ['browser:macos', 'browser:windows']) {
     assert.equal(capabilityRowFor(key)['save.album'].available, false, `${key} 桌面不支持文件系统面板`)
