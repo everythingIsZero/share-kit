@@ -95,12 +95,15 @@ export const NEUTRAL_HINT_IDS = Object.freeze({
 
 /**
  * 产物偏好序：同一环境里可用的动作可能不止一个，按此顺序取第一个。
- * 系统分享面板排在保存之前——它是唯一「既能存又能分享」的统一出口；
- * `save.album`（系统面板保存 → 相册/文件）又排在 `save.download`（a[download] → 下载目录）
- * 之前：有系统面板就用面板（能进相册），否则才退到下载。
+ * 系统分享面板排在保存之前——它是唯一「既能存又能分享」的统一出口。
+ *
+ * 图片的保存链：`preview.longpress` 排在 `save.album` / `save.download` **之前**——
+ * iOS 上长按图片是**原生直路**（进相册），而 `a[download]` 落「文件」App、不进相册；
+ * 故长按可用时不得让下载压过长按。保存链顺序：长按（相册）→ 系统面板保存（相册/文件）
+ * → 直接下载（下载目录）。
  */
 export const ARTIFACT_PREFERENCE = Object.freeze({
-  image: Object.freeze(['share.system', 'save.album', 'save.download', 'preview.longpress', 'share.card.wx', 'copy.link']),
+  image: Object.freeze(['share.system', 'preview.longpress', 'save.album', 'save.download', 'share.card.wx', 'copy.link']),
   video: Object.freeze(['share.system', 'save.album', 'save.download', 'share.card.wx', 'copy.link']),
   link: Object.freeze(['share.system', 'share.card.wx', 'share.card.miniapp', 'copy.link']),
 })

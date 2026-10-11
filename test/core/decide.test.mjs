@@ -317,18 +317,37 @@ test('listActions 与 decideAction 永远一致：主推荐 = decideAction 的 p
   }
 })
 
-test('iOS 浏览器图片·点击瞬间：[系统分享(主), 保存图片, 查看大图, 复制链接]，绝不列会失败的项', () => {
+test('iOS 浏览器图片·点击瞬间：[系统分享(主), 查看大图, 保存图片, 复制链接]（长按先于下载）', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK_SIGNALS })
-  // save.album（系统面板 → 相册/文件）在 iOS 可用；save.download 被「保存二选一」抑制
-  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'save.album', 'preview.longpress', 'copy.link'])
+  // save.album（系统面板 → 相册/文件）在 iOS 可用；save.download 被「保存二选一」抑制；
+  // preview.longpress（原生直路 → 相册）排在保存链之前
+  assert.deepEqual(list.actions.map((a) => a.id), ['share.system', 'preview.longpress', 'save.album', 'copy.link'])
   assert.equal(list.actions[0].isPrimary, true)
   assert.equal(list.actions.some((a) => a.id === 'save.download'), false, '有系统面板保存时不再列下载')
 })
 
-test('iOS 浏览器图片·首帧（无激活）：系统面板类动作被信号闸挡，落下载', () => {
+test('图片偏好序：preview.longpress 先于 save.download（iOS a[download] 落文件，长按才是进相册的直路）', () => {
+  // 表级：偏好序本身
+  const order = ARTIFACT_PREFERENCE.image
+  assert.ok(order.indexOf('preview.longpress') < order.indexOf('save.download'), '长按必须排在下载之前')
+  assert.ok(order.indexOf('preview.longpress') < order.indexOf('save.album'), '长按排在系统面板保存之前')
+  assert.ok(order.indexOf('save.album') < order.indexOf('save.download'), '系统面板保存排在下载之前')
+
+  // 行为级：iOS 无系统面板（canShareFiles=false）时，长按是 primary，下载排其后
+  const list = listActions({
+    fingerprint: fp('browser', 'ios', 'wkwebview'),
+    artifactKind: 'image',
+    signals: { hasTransientActivation: true, canShareFiles: false, hasDownloadAttr: true },
+  })
+  const ids = list.actions.map((a) => a.id)
+  assert.deepEqual(ids, ['preview.longpress', 'save.download', 'copy.link'])
+  assert.ok(ids.indexOf('preview.longpress') < ids.indexOf('save.download'), '下载不得压过长按')
+})
+
+test('iOS 浏览器图片·首帧（无激活）：长按为 primary，系统面板类动作被信号闸挡，下载排其后', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: { hasTransientActivation: false, canShareFiles: true, hasDownloadAttr: true } })
-  // share.system / save.album 都要一次性激活；未激活时只剩 save.download（a[download] 不依赖激活）
-  assert.deepEqual(list.actions.map((a) => a.id), ['save.download', 'preview.longpress', 'copy.link'])
+  // share.system / save.album 都要一次性激活；未激活时长按为 primary，save.download 排其后
+  assert.deepEqual(list.actions.map((a) => a.id), ['preview.longpress', 'save.download', 'copy.link'])
 })
 
 test('微信 iOS 图片：[查看大图(主), 复制链接]（卡片带不动图片，被产物闸挡）', () => {

@@ -14,7 +14,8 @@
 import { chromium } from '/opt/homebrew/lib/node_modules/browser-use/node_modules/playwright/index.mjs'
 import { readFileSync } from 'node:fs'
 
-const BASE = 'https://share.hxym18.com/demo/'
+// 默认打线上；本地自检可用 SHARE_DEMO_BASE=http://localhost:<port>/demo/ 指向本机 serve
+const BASE = process.env.SHARE_DEMO_BASE || 'https://share.hxym18.com/demo/'
 // jsQR UMD 本地读文件注入浏览器侧解码（不依赖 CDN）；utf8 编码读出字符串
 const jsqrCode = readFileSync(new URL('../node_modules/jsqr/dist/jsQR.js', import.meta.url), 'utf8')
 
@@ -109,37 +110,39 @@ const SCENARIOS = [
     name: '微信Android',
     ua: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/122.0.0.0 Mobile Safari/537.36 XWEB/115 MMWEBSDK/20240404 MicroMessenger/8.0.49.2600(0x28003135)',
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
-    expect: { container: 'wechat', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', hint: 'non-null', firstList: 'preview.longpress,copy.link' },
+    // Android（XWeb）长按保存失败、下载被宿主拦（jinlab 实测）→ 唯一动作 copy.link，且不给长按引导
+    expect: { container: 'wechat', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'copy.link', reason: 'artifact-not-supported', hint: 'non-null', firstList: 'copy.link' },
     async interact(page) {
-      // 微信内直出冒烟：点击先弹海报大图预览层（长按可保存 / 发送给朋友）
+      // 点击先弹海报大图预览层（图是基本操作），但无长按提示（Android 长按存不下），复制收在层内
       const layer = await openPreview(page)
       check('[微信Android] 点击先弹海报大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
       check('[微信Android] 预览层展示 blob 大图', layer.blob)
-      check('[微信Android] 层内有长按提示', !!layer.tip, layer.tip)
+      check('[微信Android] 长按存不下 → 不出长按提示', layer.tip === null, layer.tip)
+      checkLayer('微信Android', layer, [{ action: 'copy.link', primary: true }])
     },
   },
   {
     name: '微信桌面Mac',
     ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) MicroMessenger/6.0.2',
     viewport: { width: 1280, height: 900 },
-    expect: { container: 'wechat-desktop', os: 'macos', engine: 'unknown', versionBand: 'macos-10', primary: 'save.album', reason: 'signal-fallback', hint: 'null', firstList: 'save.album,copy.link' },
+    expect: { container: 'wechat-desktop', os: 'macos', engine: 'unknown', versionBand: 'macos-10', primary: 'save.download', reason: 'signal-fallback', hint: 'null', firstList: 'save.download,copy.link' },
     async interact(page) {
-      // PC 微信：无长按无相册 → 预览层内主推荐=信号兜底的「保存图片」→ 点击真实下载
+      // PC 微信：无长按无相册 → 预览层内主推荐=信号兜底的「下载本机」→ 点击真实下载
       const layer = await openPreview(page)
       check('[微信桌面Mac] 预览层展示 blob 大图', layer.blob)
       check('[微信桌面Mac] PC 无长按菜单不出长按提示', layer.tip === null, layer.tip)
-      checkLayer('微信桌面Mac', layer, [{ action: 'save.album', primary: true }, { action: 'copy.link', primary: false }])
+      checkLayer('微信桌面Mac', layer, [{ action: 'save.download', primary: true }, { action: 'copy.link', primary: false }])
       const dl = page.waitForEvent('download', { timeout: 15000 })
-      await page.click('.share-kit-preview-btn[data-action="save.album"]')
+      await page.click('.share-kit-preview-btn[data-action="save.download"]')
       const download = await dl
-      check('[微信桌面Mac] 层内选保存后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
+      check('[微信桌面Mac] 层内选下载后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
     },
   },
   {
     name: '小程序webview',
     ua: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/122.0.0.0 Mobile Safari/537.36 XWEB/115 MMWEBSDK/20240404 MicroMessenger/8.0.49.2600(0x28003135) miniProgram',
     viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true,
-    // 小程序 webview 表内动作全不可用（save.album 是文档级 false，信号兜底不得推翻）→ 唯一动作 copy.link
+    // 小程序 webview 表内动作全不可用（save.download 是文档级 false，信号兜底不得推翻）→ 唯一动作 copy.link
     expect: { container: 'wechat-miniprogram-webview', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'copy.link', reason: 'fallback-only', hint: 'non-null', firstList: 'copy.link' },
     init: () => {
       navigator.clipboard.writeText = (t) => {
@@ -162,13 +165,14 @@ const SCENARIOS = [
     name: 'iOS Safari(无头)',
     ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
     viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
-    // 无头环境 stub 掉 canShare，确定性模拟 iOS 无系统分享 → 首选落长按预览（browser:ios 的可靠路径）
-    expect: { container: 'browser', os: 'ios', engine: 'wkwebview', versionBand: 'ios-17', primary: 'preview.longpress', firstList: 'preview.longpress,copy.link' },
+    // 无头环境 stub 掉 canShare，确定性模拟 iOS 无系统分享 → 首选落长按（原生直路 → 相册）；
+    // 下载（a[download] → 文件）排其后，绝不压过长按
+    expect: { container: 'browser', os: 'ios', engine: 'wkwebview', versionBand: 'ios-17', primary: 'preview.longpress', firstList: 'preview.longpress,save.download,copy.link' },
     init: () => {
       navigator.canShare = () => false
     },
     async interact(page) {
-      // 无系统分享的 iOS 浏览器：主推荐也是长按保存 → 点击先弹大图预览层
+      // 无系统分享的 iOS 浏览器：主推荐长按保存 → 点击先弹大图预览层（下载为次选，收在层内）
       const layer = await openPreview(page)
       check('[iOS Safari] 主推荐长按：点击先弹大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
       check('[iOS Safari] 预览层展示 blob 大图', layer.blob)
@@ -179,7 +183,7 @@ const SCENARIOS = [
     name: 'Android Chrome+分享',
     ua: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
     viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true,
-    expect: { container: 'browser', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', firstList: 'preview.longpress,copy.link' },
+    expect: { container: 'browser', os: 'android', engine: 'blink', versionBand: 'android-14', primary: 'preview.longpress', reason: 'primary-available', firstList: 'preview.longpress,save.download,copy.link' },
     init: () => {
       // stub 系统分享：canShareFiles 探测过 → 点击瞬间（transient 激活）share.system 入列成为主推荐；
       // 同时记录 url 是否混入——分享图就是图，url 混传会让 iOS 面板把链接当主体
@@ -192,7 +196,8 @@ const SCENARIOS = [
     },
     async interact(page) {
       const layer = await openPreview(page)
-      checkLayer('Android Chrome', layer, [{ action: 'share.system', primary: true }, { action: 'copy.link', primary: false }])
+      // 点击瞬间（已激活）：系统分享 + 系统面板保存（save.album）+ 复制；长按项不渲染按钮
+      checkLayer('Android Chrome', layer, [{ action: 'share.system', primary: true }, { action: 'save.album', primary: false }, { action: 'copy.link', primary: false }])
       await page.click('.share-kit-preview-btn[data-action="share.system"]')
       await page.waitForFunction(() => window.__shareCalled, null, { timeout: 10000 })
       const called = await page.evaluate(() => window.__shareCalled)
@@ -204,15 +209,15 @@ const SCENARIOS = [
     name: 'Mac Chrome',
     ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 900 },
-    expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.album', reason: 'primary-available', hint: 'null', firstList: 'save.album,copy.link' },
+    expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.download', reason: 'primary-available', hint: 'null', firstList: 'save.download,copy.link' },
     async interact(page) {
-      // 桌面：预览层主推荐取决于无头环境是否探得 canShare（两者都合法），保存项恒在 → 层内选择后下载 + 二维码识读
+      // 桌面：无系统面板保存，保存动作是 save.download（下载目录）；层内主推荐取决于无头环境是否探得 canShare
       const layer = await openPreview(page)
-      check('[Mac Chrome] 层内主推荐=偏好序首个可用项', layer.btns.length >= 2 && layer.btns[0].primary === true && ['share.system', 'save.album'].includes(layer.btns[0].action), layer.btns.map((b) => `${b.action}${b.primary ? '*' : ''}`).join(','))
+      check('[Mac Chrome] 层内主推荐=偏好序首个可用项', layer.btns.length >= 2 && layer.btns[0].primary === true && ['share.system', 'save.download'].includes(layer.btns[0].action), layer.btns.map((b) => `${b.action}${b.primary ? '*' : ''}`).join(','))
       const dl = page.waitForEvent('download', { timeout: 15000 })
-      await page.click('.share-kit-preview-btn[data-action="save.album"]')
+      await page.click('.share-kit-preview-btn[data-action="save.download"]')
       const download = await dl
-      check('[Mac Chrome] 选择保存后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
+      check('[Mac Chrome] 选择下载后触发真实下载', download.suggestedFilename() === 'share-kit-poster.png', download.suggestedFilename())
       await page.addScriptTag({ content: jsqrCode })
       const decoded = await page.evaluate(() => {
         const { canvas } = window.__poster
@@ -235,7 +240,7 @@ const SCENARIOS = [
     name: 'Mac Chrome link 产物',
     ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 900 },
-    expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.album', reason: 'primary-available', hint: 'null', firstList: 'save.album,copy.link' },
+    expect: { container: 'browser', os: 'macos', engine: 'blink', versionBand: 'macos-10', primary: 'save.download', reason: 'primary-available', hint: 'null', firstList: 'save.download,copy.link' },
     init: () => {
       // 模拟真实桌面 Chrome 的分享能力分裂：share 接口存在（Level 1：url/text），
       // canShare({files}) 返回 false（桌面不支持文件分享）——link 过杀修复（2026-10-05）的现场

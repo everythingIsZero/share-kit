@@ -117,7 +117,7 @@
       {
         keys: ['wechat:ios', 'wechat:android'], label: '微信内打开（手机）',
         signals: { canShareFiles: false, hasTransientActivation: true, hasDownloadAttr: false },
-        how: '长按弹出的海报图 → 菜单选「保存图片」或「发送给朋友」（图片消息）',
+        how: 'iOS 长按弹出的海报图 → 菜单选「保存图片」或「发送给朋友」；Android 长按存不下，只能复制链接',
       },
       {
         keys: ['wechat-desktop:macos', 'wechat-desktop:windows'], label: '微信内打开（PC）',
@@ -137,7 +137,7 @@
       {
         keys: ['browser:macos', 'browser:windows'], label: '电脑浏览器',
         signals: { canShareFiles: true, hasTransientActivation: true, hasDownloadAttr: true },
-        how: '点「分享」面板发送，或点「保存图片」下载 PNG',
+        how: '点「分享」面板发送，或点「下载图片」下载 PNG',
       },
       {
         keys: ['wechat-miniprogram-webview:ios', 'wechat-miniprogram-webview:android'], label: '小程序 web-view',

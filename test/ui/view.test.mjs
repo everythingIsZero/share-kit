@@ -18,11 +18,11 @@ const CLICK = { canShareFiles: true, hasTransientActivation: true, hasDownloadAt
 test('sheetItemsOf：项数据带标签与主推荐标记，保持偏好序', () => {
   const list = listActions({ fingerprint: fp('browser', 'ios', 'wkwebview'), artifactKind: 'image', signals: CLICK })
   const items = sheetItemsOf(list, 'image')
-  // save.album（系统面板保存）入列；save.download 因 save.album 已在列而被二选一抑制
-  assert.deepEqual(items.map((i) => i.id), ['share.system', 'save.album', 'preview.longpress', 'copy.link'])
+  // 图片保存链：长按先于系统面板保存；save.download 因 save.album 已在列而被二选一抑制
+  assert.deepEqual(items.map((i) => i.id), ['share.system', 'preview.longpress', 'save.album', 'copy.link'])
   assert.deepEqual(
     items.map((i) => i.label),
-    ['分享', '保存图片', '长按保存海报', '复制链接']
+    ['分享', '长按保存海报', '保存图片', '复制链接']
   )
   assert.equal(items[0].isPrimary, true)
   assert.equal(items.filter((i) => i.isPrimary).length, 1)
