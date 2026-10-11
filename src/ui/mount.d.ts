@@ -36,11 +36,14 @@ export declare const GUIDANCE_COPY_ID: Readonly<Record<string, string>>
 /** 敏感 query 键：出现即判非公开分享链 */
 export declare const SENSITIVE_QUERY_KEYS: readonly string[]
 
-/** 默认公开分享域 */
+/** 默认公开分享域（恒在；publicHosts 只追加，不替换） */
 export declare const DEFAULT_PUBLIC_HOSTS: readonly string[]
 
 /** 判 URL 是否公开分享链（host 在允许域内 + 无敏感 query）；私有页/token/非法 URL 一律 false */
 export declare function isPublicShareUrl(url?: string | null, publicHosts?: readonly string[]): boolean
+
+/** 该动作是否会用到分享链（url）；share.system 有文件时用文件、不用 url */
+export declare function actionUsesShareUrl(actionId: string, files?: unknown): boolean
 
 export function mountShare(
   target: HTMLElement,
@@ -48,7 +51,7 @@ export function mountShare(
     artifact?: ShareArtifact
     labels?: ShareLabels
     onResult?: (result: ShareResult) => void
-    /** 站点声明的公开分享域（缺省 share.hxym18.com）；非公开链会被拒绝复制/分享 */
+    /** 站点声明的公开分享域，**追加**到默认域（并集，不替换）；非公开链会被拒绝复制/分享 */
     publicHosts?: readonly string[]
   }
 ): ShareHandle

@@ -133,8 +133,8 @@ artifact.imageUrl = exported.url
 ```
 
 > **分享链校验（S3）**：`mountShare` 只把**公开分享链**交给复制 / 系统分享 / 卡片。
-> 判断口径是 `isPublicShareUrl(url, publicHosts?)`——host 必须在公开域内（默认 `share.hxym18.com`，
-> 站点可用 `publicHosts` 声明自己的公开域），且不含 `token` / `t` / `access_token` 类敏感 query。
+> 判断口径是 `isPublicShareUrl(url, publicHosts?)`——host 必须在公开域内（默认 `share.hxym18.com` **恒在**；
+> 站点可用 `publicHosts` **追加**自己的公开域，取**并集、不替换**），且不含 `token` / `t` / `access_token` 类敏感 query。
 > 命中非公开链（如把 `location.href` 私有页地址传进来）时**不复制、不分享**，按钮与顶部提示如实告知
 > 「这条链接不是公开分享链」，并通过 `onResult` 回报 `{ ok:false, outcome:'blocked' }`——绝不静默外泄。
 

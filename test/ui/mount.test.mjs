@@ -126,7 +126,7 @@ Object.defineProperty(globalThis, 'location', { value: { href: PAGE_URL }, confi
 globalThis.document = documentStub
 globalThis.requestAnimationFrame = (cb) => cb()
 
-const { mountShare, GUIDANCE_COPY_ID, isPublicShareUrl } = await import('../../src/ui/mount.mjs')
+const { mountShare, GUIDANCE_COPY_ID, isPublicShareUrl, actionUsesShareUrl } = await import('../../src/ui/mount.mjs')
 const { renderCopy } = await import('../../src/core/index.mjs')
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
@@ -250,9 +250,21 @@ test('isPublicShareUrl：公开短链 true；私有页 / 敏感 query / 非允�
   assert.equal(isPublicShareUrl(''), false)
   assert.equal(isPublicShareUrl(undefined), false)
   assert.equal(isPublicShareUrl('not a url'), false)
-  // 站点声明公开域（参数）
+  // 站点声明公开域：**追加**（并集），默认域恒在、不被替换
   assert.equal(isPublicShareUrl('https://cdn.example.com/s/1', ['cdn.example.com']), true)
-  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1', ['cdn.example.com']), false)
+  assert.equal(isPublicShareUrl('https://share.hxym18.com/s/1', ['cdn.example.com']), true, '默认域恒在（并集，非替换）')
+  // 传 [location.hostname] 也不会放行任意域：非公开域仍 false
+  assert.equal(isPublicShareUrl('https://fang.hxym18.com/ledger', ['fang.hxym18.com']), true, '站点显式追加的域可用')
+  assert.equal(isPublicShareUrl('https://evil.com/s/1', ['fang.hxym18.com']), false, '未声明的域仍 false')
+})
+
+test('actionUsesShareUrl：只拦用到分享链的动作；share.system 有文件时不拦', () => {
+  for (const a of ['copy.link', 'share.card.wx', 'share.card.miniapp']) {
+    assert.equal(actionUsesShareUrl(a, []), true, `${a} 恒用分享链`)
+  }
+  assert.equal(actionUsesShareUrl('share.system', []), true, 'share.system 无 files → 用 url → 拦')
+  assert.equal(actionUsesShareUrl('share.system', [{ name: 'v.mp4' }]), false, 'share.system 有 files → 用文件 → 不拦')
+  assert.equal(actionUsesShareUrl('save.album', [{}]), false, '下载不用分享链')
 })
 
 test('mount：非公开链（私有页 / token）不复制、不分享，给如实反馈（不静默）', async () => {
@@ -284,5 +296,40 @@ test('mount：公开短链照常复制（校验不误伤合法分享链）', asy
   fire(target.children[0], 'click')
   await tick()
   assert.equal(copied, 'https://share.hxym18.com/s/app/ok')
+  handle.unmount()
+})
+
+test('mount：非公开链时 share.card.wx（引导类）同样被拦，不报 done', async () => {
+  // 微信内 link → sheet 里 share.card.wx；私有 url 必须被闸门拦下
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
+  const results = []
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://fang.hxym18.com/ledger?token=secret' },
+    onResult: (r) => results.push(r),
+  })
+  fire(target.children[0], 'click') // 打开 sheet
+  const item = findAction(documentStub.body, 'share.card.wx')
+  assert.ok(item, 'sheet 里应有 share.card.wx')
+  fire(item, 'click')
+  await tick()
+  assert.equal(target.children[0].textContent, renderCopy('fail-private-url'), '被拦时给如实反馈')
+  assert.notEqual(target.children[0].textContent, renderCopy('card-wx-link'), '不得给引导（被拦，未进入引导）')
+  assert.equal(results[0].outcome, 'blocked')
+  assert.equal(results[0].action, 'share.card.wx')
+  handle.unmount()
+})
+
+test('mount：站点追加公开域（publicHosts）后该域可用，默认域仍在', async () => {
+  setUA('')
+  copied = null
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://cdn.example.com/s/1' },
+    publicHosts: ['cdn.example.com'],
+  })
+  fire(target.children[0], 'click')
+  await tick()
+  assert.equal(copied, 'https://cdn.example.com/s/1', '追加域应放行')
   handle.unmount()
 })
