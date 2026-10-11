@@ -87,11 +87,11 @@ export function detectOs(ua, maxTouchPoints) {
   return 'unknown'
 }
 
-/** 内核判定（iOS 全系都是 WKWebView；国产内核先于 Blink） */
+/** 内核判定（iOS 全系都是 WKWebView，先于国产内核串；其余国产内核先于 Blink） */
 export function detectEngine(ua, os) {
   if (typeof ua !== 'string' || ua.length === 0) return 'unknown'
-  if (RE_U4.test(ua)) return 'u4'
   if (os === 'ios') return 'wkwebview'
+  if (RE_U4.test(ua)) return 'u4'
   if (RE_GECKO.test(ua)) return 'gecko'
   if (RE_BLINK.test(ua)) return 'blink'
   if (RE_WEBKIT.test(ua) && RE_SAFARI.test(ua)) return 'wkwebview'

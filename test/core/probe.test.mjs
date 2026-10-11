@@ -97,6 +97,15 @@ test('国产内核先于 Blink：UCBrowser / Quark → u4', () => {
   assert.equal(normalizeFingerprint(sig(quark, { maxTouchPoints: 5 })).fingerprint.engine, 'u4')
 })
 
+test('iOS 上 UC（UCBrowser/UWS）仍判 wkwebview：iOS 全系 WebKit，先于国产内核串（S8 对齐 env）', () => {
+  const iosUc =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) UWS/3.10.2 Mobile/15E148 Safari/604.1 UCBrowser/15.4.6.1446'
+  const fp = normalizeFingerprint(sig(iosUc, { maxTouchPoints: 5 })).fingerprint
+  assert.equal(fp.os, 'ios')
+  assert.equal(fp.container, 'browser')
+  assert.equal(fp.engine, 'wkwebview')
+})
+
 test('版本带只作修饰：版本数字变，其余三维不变', () => {
   const ua16 =
     'Mozilla/5.0 (iPhone; CPU iPhone OS 16_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Mobile/15E148 Safari/604.1'
