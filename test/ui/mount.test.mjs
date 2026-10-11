@@ -152,6 +152,13 @@ function findClass(root, cls) {
   return null
 }
 
+/** 按 class 收集全部匹配元素（保持 DOM 顺序，用于断言「首个按钮 = 主推荐」） */
+function collectByClass(root, cls, out = []) {
+  if (typeof root.className === 'string' && root.className.split(/\s+/).includes(cls)) out.push(root)
+  for (const c of root.children) collectByClass(c, cls, out)
+  return out
+}
+
 test('mount：deps.url 只取 artifact.url（有 url 时复制到的是分享链）', async () => {
   setUA('')
   copied = null
@@ -473,5 +480,47 @@ test('mount：image 无 files 时预览层不列 save.album / share.system（fil
   } finally {
     nav.share = prevShare
     nav.canShare = prevCanShare
+  }
+})
+
+test('mount：图片预览层过滤长按项后，首个剩余按钮顺延为主推荐（iOS / Android）', async () => {
+  // 长按是主推荐但不渲染按钮 → 过滤后若无高亮，必须把首个剩余按钮（save.album）重标为主推荐
+  const nav = globalThis.navigator
+  const prevShare = nav.share
+  const prevCanShare = nav.canShare
+  const prevFile = globalThis.File
+  nav.share = () => Promise.resolve()
+  nav.canShare = () => true
+  globalThis.File = class File {}
+  const uas = [
+    ['iOS', 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1'],
+    ['Android', 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36'],
+  ]
+  const isPrimary = (el) => el.className.split(/\s+/).includes('primary')
+  try {
+    for (const [label, ua] of uas) {
+      setUA(ua)
+      documentStub.body.children = [] // 清掉上一轮未自动移除的浮层
+      const target = makeEl('div')
+      const handle = mountShare(target, {
+        artifact: {
+          kind: 'image',
+          url: 'https://share.hxym18.com/s/ok',
+          imageUrl: 'https://share.hxym18.com/s/img.png',
+          files: [new globalThis.File()],
+        },
+      })
+      fire(target.children[0], 'click') // image + 有图 → 预览层
+      const btns = collectByClass(documentStub.body, 'share-kit-preview-btn')
+      assert.ok(btns.length >= 2, `${label}：预览层应有多个按钮`)
+      assert.equal(btns[0].dataset.action, 'save.album', `${label}：长按不渲染按钮，首个按钮应是 save.album`)
+      assert.equal(isPrimary(btns[0]), true, `${label}：首个剩余按钮应被重标为主推荐`)
+      assert.equal(btns.filter(isPrimary).length, 1, `${label}：主推荐恰一个`)
+      handle.unmount()
+    }
+  } finally {
+    nav.share = prevShare
+    nav.canShare = prevCanShare
+    globalThis.File = prevFile
   }
 })

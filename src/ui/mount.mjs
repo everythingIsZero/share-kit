@@ -233,12 +233,22 @@ export function mountShare(target, options = {}) {
   }
 
   /**
+   * 过滤掉不渲染按钮的动作（preview.longpress：大图本身可长按）后，保证层内**恒有一个主推荐**：
+   * 若主推荐原本落在被过滤项上（长按项），把首个剩余按钮顺延标为 `isPrimary`——
+   * 否则层内会出现「一个高亮按钮都没有」，违「一环境一个主推荐」（红线 2）。
+   */
+  function withPrimary(items) {
+    if (items.length === 0 || items.some((i) => i.isPrimary)) return items
+    return items.map((it, idx) => (idx === 0 ? { ...it, isPrimary: true } : it))
+  }
+
+  /**
    * 海报预览层（图片产物点击的统一入口）：大图 + 可选长按提示 + 层内方式按钮行。
    * preview.longpress 不渲染按钮——大图本身可长按，由 tip 说明；其余动作逐个转按钮
    * （主推荐高亮），点击收层后在同一手势的同步段执行（R14）。
    */
   function openPreview(list) {
-    const items = sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress')
+    const items = withPrimary(sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress'))
     const hasLongpress = list.actions.some((a) => a.id === 'preview.longpress')
     overlayClose = showPreviewOverlay({
       imageUrl: fileImageUrl(artifact),
@@ -269,8 +279,8 @@ export function mountShare(target, options = {}) {
       return
     }
     // 无图可显（link / video 产物，或图未就绪）：Action Sheet 兜底；
-    // preview.longpress 没有大图可长按，剔出列表避免死项
-    const items = sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress')
+    // preview.longpress 没有大图可长按，剔出列表避免死项；同样保证层内恒有一个主推荐
+    const items = withPrimary(sheetItemsOf(list, kind, labels).filter((i) => i.id !== 'preview.longpress'))
     if (items.length === 1) {
       run(items[0].id) // 唯一动作：不弹列表，同步段直接执行（R14）
       return

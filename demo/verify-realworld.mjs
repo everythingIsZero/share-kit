@@ -89,7 +89,8 @@ const SCENARIOS = [
       check('[微信iOS] 点击先弹海报大图（无 sheet 中转）', await page.evaluate(() => !document.querySelector('.share-kit-sheet')))
       check('[微信iOS] 预览层展示 blob 大图', layer.blob)
       check('[微信iOS] 层内有长按提示（保存 + 发送给朋友）', layer.tip && layer.tip.includes('长按') && layer.tip.includes('发送给朋友'), layer.tip)
-      checkLayer('微信iOS', layer, [{ action: 'copy.link', primary: false }])
+      // 长按项不渲染按钮，主推荐顺延到首个剩余按钮（复制链接）
+      checkLayer('微信iOS', layer, [{ action: 'copy.link', primary: true }])
       await page.click('.share-kit-preview-close')
       // 关闭有 260ms 退场动画，等 DOM 真正移除
       await page.waitForFunction(() => !document.querySelector('.share-kit-preview'), null, { timeout: 5000 })
@@ -197,8 +198,8 @@ const SCENARIOS = [
     },
     async interact(page) {
       const layer = await openPreview(page)
-      // 点击瞬间（已激活）：系统面板保存（save.album）+ 复制；长按项不渲染按钮，同机制 share.system 去重
-      checkLayer('Android Chrome', layer, [{ action: 'save.album', primary: false }, { action: 'copy.link', primary: false }])
+      // 点击瞬间（已激活）：系统面板保存（save.album）+ 复制；长按项不渲染按钮（主推荐顺延到 save.album），同机制 share.system 去重
+      checkLayer('Android Chrome', layer, [{ action: 'save.album', primary: true }, { action: 'copy.link', primary: false }])
       await page.click('.share-kit-preview-btn[data-action="save.album"]')
       await page.waitForFunction(() => window.__shareCalled, null, { timeout: 10000 })
       const called = await page.evaluate(() => window.__shareCalled)
