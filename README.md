@@ -207,7 +207,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，164 条）
+make test       # 跑全部测试（node:test，165 条）
 make lint       # node --check 所有源文件
 ```
 
