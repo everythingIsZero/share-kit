@@ -62,10 +62,12 @@ test('系统分享传参：有 files 只传图不带 url（防 iOS 面板把链�
   assert.equal(seen.files, undefined)
 })
 
-test('引导类动作不调用外部实现：mode 为 guidance', async () => {
+test('引导类动作不调用外部实现：mode 为 guidance，outcome 为 guidance（非 done）', async () => {
   const result = await executeAction('preview.longpress', {})
   assert.equal(result.mode, 'guidance')
   assert.equal(result.ok, true)
+  assert.equal(result.outcome, 'guidance', '引导类不得报 done')
+  assert.notEqual(result.outcome, 'done')
 })
 
 test('引导类动作一律不碰注入实现：给了 share 也不调用，空 deps 也不抛错', async () => {
@@ -77,9 +79,11 @@ test('引导类动作一律不碰注入实现：给了 share 也不调用，空 
     assert.equal(ACTION_DEP_MAP[action], null, `${action} 的依赖键必须是 null`)
     const withDep = await executeAction(action, { share: () => { shareCalls += 1 } })
     assert.equal(withDep.mode, 'guidance')
+    assert.equal(withDep.outcome, 'guidance', `${action} 不得报 done`)
     assert.equal(withDep.ok, true)
     const bare = await executeAction(action, {})
     assert.equal(bare.mode, 'guidance', `${action} 空 deps 也必须给引导`)
+    assert.equal(bare.outcome, 'guidance', `${action} 空 deps 也不得报 done`)
     assert.equal(bare.ok, true)
   }
   assert.equal(shareCalls, 0, '引导类动作不得调用注入实现')

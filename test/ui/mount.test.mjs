@@ -126,11 +126,26 @@ Object.defineProperty(globalThis, 'location', { value: { href: PAGE_URL }, confi
 globalThis.document = documentStub
 globalThis.requestAnimationFrame = (cb) => cb()
 
-const { mountShare } = await import('../../src/ui/mount.mjs')
+const { mountShare, GUIDANCE_COPY_ID } = await import('../../src/ui/mount.mjs')
+const { renderCopy } = await import('../../src/core/index.mjs')
 
 const tick = () => new Promise((r) => setTimeout(r, 0))
+const setUA = (ua) => {
+  globalThis.navigator.userAgent = ua
+}
+
+/** 按 class 找元素（找 tip 条） */
+function findClass(root, cls) {
+  if (typeof root.className === 'string' && root.className.split(/\s+/).includes(cls)) return root
+  for (const c of root.children) {
+    const hit = findClass(c, cls)
+    if (hit) return hit
+  }
+  return null
+}
 
 test('mount：deps.url 只取 artifact.url（有 url 时复制到的是分享链）', async () => {
+  setUA('')
   copied = null
   const target = makeEl('div')
   const handle = mountShare(target, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/app/1' } })
@@ -141,6 +156,7 @@ test('mount：deps.url 只取 artifact.url（有 url 时复制到的是分享链
 })
 
 test('mount：artifact 无 url 时不复制任何东西（不回退 location.href，也不复制字面量 "undefined"）', async () => {
+  setUA('')
   copied = null
   const target = makeEl('div')
   const handle = mountShare(target, { artifact: { kind: 'link' } })
@@ -154,6 +170,7 @@ test('mount：artifact 无 url 时不复制任何东西（不回退 location.hre
 })
 
 test('mount：save.album 下载走文件源 fileUrl，不下载页面 HTML', async () => {
+  setUA('')
   downloaded.length = 0
   const target = makeEl('div')
   const handle = mountShare(target, {
@@ -167,4 +184,46 @@ test('mount：save.album 下载走文件源 fileUrl，不下载页面 HTML', asy
   assert.equal(downloaded[0], 'blob:file', '下载源应是文件 fileUrl')
   assert.notEqual(downloaded[0], PAGE_URL, '不得下载页面 HTML')
   handle.unmount()
+})
+
+test('mount：deps 为 getter——挂载后补 url 能取到最新值（执行时取值）', async () => {
+  setUA('') // 未知环境 link 只剩 copy.link 单一动作，点击直接执行
+  copied = null
+  const target = makeEl('div')
+  const artifact = { kind: 'link' } // 挂载时无 url
+  const handle = mountShare(target, { artifact })
+  artifact.url = 'https://share.hxym18.com/s/app/late' // 挂载后补
+  fire(target.children[0], 'click')
+  await tick()
+  assert.equal(copied, 'https://share.hxym18.com/s/app/late', 'getter 应在执行时取到补上的 url')
+  handle.unmount()
+})
+
+test('mount：引导类动作不报「已完成」，按钮显示对应引导文案', async () => {
+  // 微信内 link → share.card.wx（引导类）：点按钮不弹分享面板，给一步引导
+  setUA('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0')
+  const target = makeEl('div')
+  const handle = mountShare(target, { artifact: { kind: 'link', url: 'https://share.hxym18.com/s/app/1' } })
+  fire(target.children[0], 'click') // 打开 Action Sheet
+  const item = findAction(documentStub.body, 'share.card.wx')
+  assert.ok(item, '微信内 link 的 sheet 里应有 share.card.wx')
+  fire(item, 'click')
+  await tick()
+  const expected = renderCopy('card-wx-link')
+  assert.equal(target.children[0].textContent, expected, '按钮应显示引导文案')
+  assert.notEqual(target.children[0].textContent, '已完成 · 可再试一次', '引导类不得报「已完成」')
+  const tip = findClass(documentStub.body, 'share-kit-tip')
+  assert.ok(tip, '引导类应弹 tip')
+  assert.equal(tip.textContent, expected, 'tip 文案与动作对应')
+  handle.unmount()
+})
+
+test('tip 按动作选文案：wx / miniapp 各用各自 copy，不恒用 card-wx-link', () => {
+  assert.equal(GUIDANCE_COPY_ID['share.card.wx'], 'card-wx-link')
+  assert.equal(GUIDANCE_COPY_ID['share.card.miniapp'], 'card-miniapp-link')
+  assert.notEqual(GUIDANCE_COPY_ID['share.card.miniapp'], GUIDANCE_COPY_ID['share.card.wx'])
+  // 映射指向的 core 文案必须都存在且非空
+  for (const id of Object.values(GUIDANCE_COPY_ID)) {
+    assert.ok(renderCopy(id).length > 0, `${id} 必须有正文`)
+  }
 })

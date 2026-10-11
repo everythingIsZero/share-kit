@@ -30,6 +30,9 @@ export interface ShareHandle {
   unmount(): void
 }
 
+/** 引导类动作 → core 文案 id 的映射（导出仅供测试；非包公共出口） */
+export declare const GUIDANCE_COPY_ID: Readonly<Record<string, string>>
+
 export function mountShare(
   target: HTMLElement,
   options?: {

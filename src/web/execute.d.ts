@@ -35,7 +35,8 @@ export interface ExecuteDeps {
 /** 执行结果 */
 export interface ExecuteResult {
   ok: boolean
-  outcome: OutcomeKind
+  /** 引导类动作返回 `'guidance'`（未真正执行外部实现，不得报 `done`）；其余为 core OutcomeKind */
+  outcome: OutcomeKind | 'guidance'
   action: ActionId
   /** 'invoked' 调用了注入实现；'guidance' 只给一步引导 */
   mode: 'invoked' | 'guidance'

@@ -64,6 +64,17 @@ function fileImageUrl(artifact) {
 }
 
 /**
+ * 引导类动作 → 引导文案 id 的映射（S11：tip 按动作选文案，不恒用 `card-wx-link`）。
+ * 只做「动作 → core 文案 id」的接线，文案本体单源在 core `copy.mjs`（适配层不硬编码文案）。
+ * 导出仅供测试断言映射；非包公共出口（`./ui` 不 re-export）。
+ */
+export const GUIDANCE_COPY_ID = Object.freeze({
+  'share.card.wx': 'card-wx-link',
+  'share.card.miniapp': 'card-miniapp-link',
+  'preview.longpress': 'longpress-image',
+})
+
+/**
  * 挂载分享按钮。
  *
  * @param target   挂载点 DOM 节点（按钮插到其末尾）
@@ -85,13 +96,22 @@ export function mountShare(target, options = {}) {
     share: (payload) => navigator.share(payload),
     download: defaultDownload,
     copy: defaultCopy,
+    // 全字段**执行时取值**（getter）：业务可先挂载、渲染完成后再补 artifact 字段，点击时取到最新值。
     // S3：url 只作公开分享链，**不再 `|| location.href`**——页面地址可能是私有页（带 token），
     // 落到复制/系统分享即外泄；缺 url 时给空串（绝不 undefined，避免被强转成字面量 "undefined" 复制出去）。
-    url: artifact.url || '',
-    title: artifact.title,
-    text: artifact.text,
-    filename: artifact.filename,
-    // 下载源（save.album）：优先文件，缺 File 时用 fileUrl；执行时取值，挂载后补仍有效
+    get url() {
+      return artifact.url || ''
+    },
+    get title() {
+      return artifact.title
+    },
+    get text() {
+      return artifact.text
+    },
+    get filename() {
+      return artifact.filename
+    },
+    // 下载源（save.album）：优先文件，缺 File 时用 fileUrl
     get fileUrl() {
       return artifact.fileUrl
     },
@@ -132,17 +152,19 @@ export function mountShare(target, options = {}) {
     setLabel('正在处理…')
     Promise.resolve(executeAction(actionId, deps)).then((result) => {
       if (disposed) return
-      if (result.ok) {
+      if (result.ok && result.mode === 'guidance') {
+        // 引导类动作**不报「已完成」**：卡片由宿主菜单转发、长按由用户完成，界面只说该怎么做。
+        // 文案 id 按 result.action 选（wx / miniapp 各自的引导不同），文案本体在 core。
+        const tipText = renderCopy(GUIDANCE_COPY_ID[result.action])
+        setLabel(tipText || initialLabel)
+        if (tipText) showTipBar(tipText)
+      } else if (result.ok) {
         setLabel(doneLabel(result.action))
       } else if (result.outcome === 'cancelled') {
         // 用户取消不是失败：静默复原按钮，不显示「没完成」（AbortError 与真失败分开归因，R8）
         setLabel(initialLabel)
       } else {
         setLabel('没完成，再点一次试试')
-      }
-      if (result.mode === 'guidance' && result.ok) {
-        // share.card.wx / share.card.miniapp：卡片由宿主菜单转发，给一步引导提示
-        showTipBar(renderCopy('card-wx-link'))
       }
       if (typeof onResult === 'function') onResult(result)
     })

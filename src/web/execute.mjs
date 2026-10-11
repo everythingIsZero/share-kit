@@ -92,9 +92,12 @@ export function executeAction(actionId, deps) {
     return Promise.resolve(toResult(actionId, error))
   }
   const mode = GUIDANCE_ACTIONS.includes(actionId) ? 'guidance' : 'invoked'
+  // 引导类动作没真的执行外部实现（卡片由宿主菜单转发、长按由用户完成），**不得报 `done`**——
+  // 否则界面会把「未发生的事」说成已完成。outcome 如实标 `guidance`（S11）。
+  const outcome = mode === 'guidance' ? 'guidance' : 'done'
   // 此后才允许 await：结果 settle 与成败分类都在这里完成
   return Promise.resolve(pending).then(
-    () => ({ ok: true, outcome: 'done', action: actionId, mode }),
+    () => ({ ok: true, outcome, action: actionId, mode }),
     (error) => toResult(actionId, error)
   )
 }
