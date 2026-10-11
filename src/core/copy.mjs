@@ -73,8 +73,11 @@ export const STRONG_GUIDANCE_COPY_IDS = Object.freeze([
  * - `verifiedMenuItem` 默认 null，只有已验证覆盖才可填（见 `resolveCopy`）。
  */
 export const COPY = Object.freeze({
-  'save-album-image': Object.freeze({ id: 'save-album-image', text: '会直接保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
-  'save-album-video': Object.freeze({ id: 'save-album-video', text: '会直接保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  // 措辞用「本机」不用「相册」：save.album 是 `a[download]`，落点是**下载目录/文件**，不是相册；
+  // 视频尤其——`a[download]` 存的视频永远进不了相册。与 done-saved 口径一致（2026-10-11 改）。
+  // （longpress-image 保持不变：长按图片走的确实是「保存到相册」那条路径。）
+  'save-album-image': Object.freeze({ id: 'save-album-image', text: '会保存到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
+  'save-album-video': Object.freeze({ id: 'save-album-video', text: '会保存到本机', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'share-system-image': Object.freeze({ id: 'share-system-image', text: '在系统面板里选保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'share-system-video': Object.freeze({ id: 'share-system-video', text: '在系统面板里选保存位置或目标应用', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   // 微信系只有 link 产物会落到 share.card.wx（见 ARTIFACT_ACTION_GATES：卡片带不动文件），

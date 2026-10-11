@@ -112,3 +112,14 @@ test('闸门判定不可达的文案条目不得留在表里（死条目防回�
     assert.equal(getCopy(dead), null, `${dead} 不可达，不应留在文案表`)
   }
 })
+
+test('save.album 引导文案说「本机」不说「相册」（a[download] 落点是下载目录/文件，视频永不进相册）', () => {
+  for (const id of ['save-album-image', 'save-album-video']) {
+    const entry = getCopy(id)
+    assert.ok(entry, `${id} 必须存在——它是 save.album 的事前强引导`)
+    assert.equal(entry.text, '会保存到本机')
+    assert.equal(entry.text.includes('相册'), false, `${id} 不得承诺进相册（落点是下载目录/文件）`)
+  }
+  // 长按图片走的确实是「保存到相册」那条路径，口径保持不变
+  assert.ok(getCopy('longpress-image').text.includes('相册'))
+})
