@@ -16,9 +16,17 @@
  */
 
 import { listActions, normalizeFingerprint, renderCopy } from '../core/index.mjs'
+import { actionUsesShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
 import { collectSignals, executeAction } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
+
+/**
+ * 公开链策略已下沉到中性模块 `core/share-url.mjs`（`web/execute.mjs` 与 `mount.mjs` 共用同一实现）。
+ * 这里 re-export 以防破坏既有导入（测试与消费方曾从 `ui/mount` 取用）。
+ * 非 ui 公共出口；`share-kit/ui` 只承诺 `mountShare` + `isPublicShareUrl` + 视图函数。
+ */
+export { SENSITIVE_QUERY_KEYS, DEFAULT_PUBLIC_HOSTS, isPublicShareUrl, actionUsesShareUrl } from '../core/share-url.mjs'
 
 /** 直接下载（save.download）：a[download] 点击（落点是本机下载目录 / 「文件」，非相册） */
 function defaultDownload({ url, filename }) {
@@ -74,49 +82,6 @@ export const GUIDANCE_COPY_ID = Object.freeze({
   'preview.longpress': 'longpress-image',
 })
 
-/** 敏感 query 键：出现即判非公开（私有页常带 token 之类，绝不能被复制/分享出去） */
-export const SENSITIVE_QUERY_KEYS = Object.freeze(['token', 't', 'access_token'])
-
-/** 默认公开分享域（**恒在**；`publicHosts` 只在其上追加，绝不替换） */
-export const DEFAULT_PUBLIC_HOSTS = Object.freeze(['share.hxym18.com'])
-
-/**
- * 判一个 URL 是否**公开分享链**（S3）。仅当同时满足：host 在允许域内、且不含敏感 query。
- * 私有页 / 带 token / 非允许域 / 非法 URL / 空串一律 false——分享与复制只允许公开链，
- * 页面地址（`location.href` 之类）天然不满足，从而杜绝私有页外泄。
- *
- * **允许域 = DEFAULT_PUBLIC_HOSTS ∪ publicHosts**：默认域恒在，`publicHosts` 只作**追加**
- * 的站点公开域（传 `[location.hostname]` 不会关掉默认闸门，也不会放行任意域）。
- *
- * @param url         待判 URL
- * @param publicHosts 站点声明的**追加**公开域列表
- */
-export function isPublicShareUrl(url, publicHosts = DEFAULT_PUBLIC_HOSTS) {
-  if (typeof url !== 'string' || url.length === 0) return false
-  let parsed
-  try {
-    parsed = new URL(url)
-  } catch {
-    return false
-  }
-  const extra = Array.isArray(publicHosts) ? publicHosts.filter((h) => typeof h === 'string' && h.length > 0) : []
-  const hosts = new Set([...DEFAULT_PUBLIC_HOSTS, ...extra])
-  if (!hosts.has(parsed.hostname)) return false
-  for (const key of parsed.searchParams.keys()) {
-    if (SENSITIVE_QUERY_KEYS.includes(key.toLowerCase())) return false
-  }
-  return true
-}
-
-/**
- * 该动作是否会**用到分享链**（url）。只有用到分享链的动作才受公开链闸门约束：
- * `copy.link` / `share.card.wx` / `share.card.miniapp` 恒用 url；`share.system` **有文件时用文件、不用 url**。
- */
-export function actionUsesShareUrl(actionId, files) {
-  if (actionId === 'share.system') return !(files && files.length > 0)
-  return actionId === 'copy.link' || actionId === 'share.card.wx' || actionId === 'share.card.miniapp'
-}
-
 /**
  * 挂载分享按钮。
  *
@@ -140,6 +105,8 @@ export function mountShare(target, options = {}) {
     share: (payload) => navigator.share(payload),
     download: defaultDownload,
     copy: defaultCopy,
+    // S3：站点追加公开域随 deps 交给 executeAction 的闸门（自组 UI / ShareTrigger 也会用到）
+    publicHosts,
     // 全字段**执行时取值**（getter）：业务可先挂载、渲染完成后再补 artifact 字段，点击时取到最新值。
     // S3：url 只作公开分享链，**不再 `|| location.href`**——页面地址可能是私有页（带 token），
     // 落到复制/系统分享即外泄；缺 url 时给空串（绝不 undefined，避免被强转成字面量 "undefined" 复制出去）。
@@ -166,8 +133,15 @@ export function mountShare(target, options = {}) {
 
   // 采集环境信号 + artifact 是否真带 files：save.album / 带文件的 share.system 必须真带 files 才入列
   // （canShareFiles 只是能力探测；无 files 时只剩 save.download / copy.link，杜绝「点保存却发文本分享」）。
+  // hasDownloadSource（A）：save.download 必须有下载源（files[0] 或 fileUrl），否则不列——空源会下到页面 HTML。
   function collectNow() {
-    return { ...collectSignals(), hasFiles: !!(deps.files && deps.files.length > 0) }
+    const hasFiles = !!(deps.files && deps.files.length > 0)
+    const fileUrl = deps.fileUrl
+    return {
+      ...collectSignals(),
+      hasFiles,
+      hasDownloadSource: hasFiles || (typeof fileUrl === 'string' && fileUrl.length > 0),
+    }
   }
 
   function decideNow(signals) {

@@ -168,6 +168,9 @@ artifact.imageUrl = exported.url
 - **保存二选一 + files 守卫**：环境有系统面板就用 `save.album`，否则用 `save.download`（绝不承诺相册而落下载）；
   `hasFiles` 不是 `true` 时（含只探测到 `canShareFiles`）不列带文件的动作——`canShareFiles` 只是能力探测，
   不代表真有文件，否则会「点保存却发文本分享」（`executeAction('save.album')` 无 files 直接返回失败）。
+- **下载源守卫**：`save.download`（`a[download]`）必须有下载源——`files[0]` 或 `fileUrl`。都没有时不列该项，
+  `executeAction('save.download')` 也会拒绝执行（返回失败）——空源会让浏览器把 `a.href=''` 解析成
+  当前文档 URL，点「保存图片」实际下到整页 HTML。
 
 ## 红线（12 条，违者必改）
 

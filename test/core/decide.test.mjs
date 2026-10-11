@@ -366,6 +366,16 @@ test('files 守卫：无 files 时 image/video 不列 save.album / share.system�
   assert.equal(link.actions.map((a) => a.id).includes('share.system'), true, 'link 用 url，不受 files 守卫')
 })
 
+test('下载源守卫（A）：hasDownloadSource=false 时不列/不主推荐 save.download（空源会下到页面 HTML）', () => {
+  const base = { ...CLICK_SIGNALS, hasFiles: false }
+  const deny = listActions({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'image', signals: { ...base, hasDownloadSource: false } })
+  assert.equal(deny.actions.some((a) => a.id === 'save.download'), false, '无下载源不得列 save.download')
+  assert.equal(deny.actions[0].id, 'copy.link', '无下载源时主推荐不得落在 save.download')
+  // 未传 hasDownloadSource（旧调用方 / 首帧计划）不闸，保持既有行为（向后兼容）
+  const legacy = listActions({ fingerprint: fp('browser', 'macos', 'blink'), artifactKind: 'image', signals: base })
+  assert.equal(legacy.actions.some((a) => a.id === 'save.download'), true, '缺省不闸（向后兼容）')
+})
+
 test('图片偏好序：preview.longpress 先于 save.download（iOS a[download] 落文件，长按才是进相册的直路）', () => {
   // 表级：偏好序本身
   const order = ARTIFACT_PREFERENCE.image

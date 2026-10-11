@@ -142,6 +142,10 @@ export const ARTIFACT_ACTION_GATES = Object.freeze({
  * `hasFiles === true` 才入列——`canShareFiles` 只是**能力探测**（合成一个探针文件），
  * 不代表 artifact 真带文件；缺 files 时入列会导致「点保存却发文本分享」（share({url})）。
  * `hasFiles` 由适配包按 artifact 实际内容给出（见 `mountShare` / `RawSignals.hasFiles`）。
+ *
+ * `hasDownloadSource` 同法（A 缺陷）：`save.download`（a[download]）必须有下载源——`files[0]`
+ * 或 `fileUrl`。都没有时 `a.href=''` 会被浏览器解析成当前文档 URL，点「保存图片」实际下到整页 HTML；
+ * 适配包按 artifact 实际内容给 `hasDownloadSource`，与 `hasFiles` 同口径。
  */
 function signalsAllow(actionId, signals, artifactKind) {
   const s = signals && typeof signals === 'object' ? signals : {}
@@ -160,6 +164,10 @@ function signalsAllow(actionId, signals, artifactKind) {
     if (s.hasFiles !== true) return false
   }
   if (actionId === 'save.download' && s.hasDownloadAttr === false) return false
+  // 下载源守卫（A）：save.download 必须有文件源（files[0] 或 fileUrl），否则点了下到空 →
+  // 真实浏览器把 `href=''` 解析成当前文档 URL，下到整页 HTML。与 hasFiles 同口径，由适配包
+  // 按 artifact 实际内容给 `hasDownloadSource`；缺省（未传）不闸，保持既有调用方（首帧计划 / demo 预览）行为。
+  if (actionId === 'save.download' && s.hasDownloadSource === false) return false
   return true
 }
 

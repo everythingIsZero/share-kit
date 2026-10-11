@@ -15,12 +15,18 @@
 ### Changed
 
 - **破坏性**：`ACTION_IDS` 由六项变七项；`save.album` 的 `a[download]` 语义迁到 `save.download`（`ACTION_DEP_MAP`：`save.album`→`share`、`save.download`→`download`）。既有把 `save.album` 当下载用的接线需改为 `save.download`。
+- **破坏性（迁移注意）**：站点**自有分享域**须经 `mountShare(target, { publicHosts })` 或 `executeAction` 的 `deps.publicHosts` 传入；默认允许域只有 `share.hxym18.com`（并集追加，不可替换）。未传时，指向站点自有分享链（如 `nt.hxym18.com/r/<id>`）的复制/系统分享会被判为非公开链而拒绝。
 - **破坏性**：微信 Android（XWeb）`preview.longpress` 由 `true` 修正为 `false`（长按保存失败，jinlab 实测）。
 - **破坏性**：`executeAction('save.album')` 无 `files` 时直接返回失败（不再静默发文本分享）。
 - **同机制去重**：`save.album` 与带文件的 `share.system` 属同一系统面板机制，图片 / 视频只保留 `save.album`、link 只保留 `share.system`（不再同现，红线 2）。
 - 图片偏好序：`preview.longpress`（原生直路 → 相册）排在 `save.album` / `save.download` 之前。
 - iOS 图片的事前说明改为长按引导（`longpress-image`），与主推荐一致。
 - `save.album` 的 label / sheet 文案由「本机」改「相册」；`save.download` 用「下载」。
+
+### Fixed
+
+- **下载源为空时不再执行**：`executeAction('save.download')` 在没有 `files[0]`、也没有 `fileUrl` 时拒绝执行（`outcome: 'failed'`），不再把空字符串交给注入实现——空 `a.href` 在真实浏览器解析为当前文档 URL，会把**整页 HTML** 当「图片」下下来。`decide` 侧新增 `signals.hasDownloadSource`（适配包按 artifact 给出）同口径收闸；未传该信号的调用保持旧行为（不闸）。
+- **公开链闸门下移到执行层**：`isPublicShareUrl` / `actionUsesShareUrl` / `DEFAULT_PUBLIC_HOSTS` / `SENSITIVE_QUERY_KEYS` 由 `ui/mount.mjs` 下沉到零依赖的 `src/core/share-url.mjs`（`mount.mjs` 保留 re-export，`share-kit/ui` 运行期补出 `isPublicShareUrl`）。`executeAction` 对「用到分享链」的动作（`copy.link` / 无文件的 `share.system` / `share.card.*`）在 `url` 非公开链或为空时拒绝执行（`outcome: 'blocked'`）——此前闸门只在 `mountShare`，React `ShareTrigger` 与「`listActions` + `executeAction` 自组 UI」直调可绕过，私有页链接仍会被复制/分享。
 
 ## [0.3.0] - 2026-10-11
 

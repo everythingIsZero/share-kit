@@ -9,16 +9,16 @@ import assert from 'node:assert/strict'
 
 import { executeAction, ACTION_DEP_MAP, GUIDANCE_ACTIONS } from '../../src/web/execute.mjs'
 
-test('复制动作调用注入实现：链接原样传给 copy，返回成功', async () => {
+test('复制动作调用注入实现：公开分享链原样传给 copy，返回成功', async () => {
   let seen = null
   const result = await executeAction('copy.link', {
-    url: 'https://example.com/a?p=1',
+    url: 'https://share.hxym18.com/s/a?p=1',
     copy: (t) => {
       seen = t
       return true
     },
   })
-  assert.equal(seen, 'https://example.com/a?p=1')
+  assert.equal(seen, 'https://share.hxym18.com/s/a?p=1')
   assert.equal(result.ok, true)
   assert.equal(result.outcome, 'done')
   assert.equal(result.action, 'copy.link')
@@ -26,6 +26,7 @@ test('复制动作调用注入实现：链接原样传给 copy，返回成功', 
 
 test('取消判为取消而非失败：AbortError 落 cancelled', async () => {
   const result = await executeAction('share.system', {
+    url: 'https://share.hxym18.com/s/p',
     share: () => Promise.reject(Object.assign(new Error('user abort'), { name: 'AbortError' })),
   })
   assert.equal(result.ok, false)
@@ -36,6 +37,7 @@ test('同步阶段契约：注入实现先同步被调用，await 只在其后',
   let calledBeforeAwait = false
   // 注意：这里**不 await**，先断言调用已经发出
   const pending = executeAction('share.system', {
+    url: 'https://share.hxym18.com/s/p',
     share: () => {
       calledBeforeAwait = true
       return Promise.resolve()
@@ -51,14 +53,14 @@ test('同步阶段契约：注入实现先同步被调用，await 只在其后',
 
 test('系统分享传参：有 files 只传图不带 url（防 iOS 面板把链接当主体），无 files 才传 url', async () => {
   let seen = null
-  const deps = (extra) => ({ url: 'https://example.com/p', ...extra, share: (d) => { seen = d; return Promise.resolve() } })
+  const deps = (extra) => ({ url: 'https://share.hxym18.com/s/p', ...extra, share: (d) => { seen = d; return Promise.resolve() } })
   // 有文件：分享图就是图，url 不得混入
   await executeAction('share.system', deps({ files: [{ name: 'poster.png' }] }))
   assert.equal(seen.url, undefined, '有 files 时不得传 url')
   assert.equal(seen.files.length, 1)
   // 无文件（link 产物）：url 是分享主体
   await executeAction('share.system', deps({ files: undefined }))
-  assert.equal(seen.url, 'https://example.com/p')
+  assert.equal(seen.url, 'https://share.hxym18.com/s/p')
   assert.equal(seen.files, undefined)
 })
 
@@ -74,23 +76,27 @@ test('引导类动作一律不碰注入实现：给了 share 也不调用，空 
   // 回归：share.card.wx / share.card.miniapp 曾被误映射到 'share'，
   // 结果在微信内（navigator.share 不存在）真的去调了 share，抛错后 mode 落回 invoked，
   // 界面拿不到 guidance，浮层引导不弹。
+  // S3：卡片动作用到分享链，必须给公开链才进引导；无公开链时被闸门拦下（见下条测试）。
+  const PUBLIC_URL = 'https://share.hxym18.com/s/app/1'
   let shareCalls = 0
   for (const action of GUIDANCE_ACTIONS) {
     assert.equal(ACTION_DEP_MAP[action], null, `${action} 的依赖键必须是 null`)
-    const withDep = await executeAction(action, { share: () => { shareCalls += 1 } })
+    const url = action === 'preview.longpress' ? undefined : PUBLIC_URL
+    const withDep = await executeAction(action, { url, share: () => { shareCalls += 1 } })
     assert.equal(withDep.mode, 'guidance')
     assert.equal(withDep.outcome, 'guidance', `${action} 不得报 done`)
     assert.equal(withDep.ok, true)
-    const bare = await executeAction(action, {})
-    assert.equal(bare.mode, 'guidance', `${action} 空 deps 也必须给引导`)
-    assert.equal(bare.outcome, 'guidance', `${action} 空 deps 也不得报 done`)
-    assert.equal(bare.ok, true)
   }
   assert.equal(shareCalls, 0, '引导类动作不得调用注入实现')
+  // preview.longpress 不依赖任何入参：空 deps 也必须给引导
+  const bare = await executeAction('preview.longpress', {})
+  assert.equal(bare.mode, 'guidance', 'preview.longpress 空 deps 也必须给引导')
+  assert.equal(bare.outcome, 'guidance')
+  assert.equal(bare.ok, true)
 })
 
 test('缺注入实现不抛到调用方：转成失败结果', async () => {
-  const result = await executeAction('share.system', {})
+  const result = await executeAction('share.system', { url: 'https://share.hxym18.com/s/p' })
   assert.equal(result.ok, false)
   assert.equal(result.outcome, 'failed')
 })
@@ -125,16 +131,68 @@ test('save.download 无 files 时用 fileUrl，仍不落页面 url', async () =>
   assert.notEqual(seen[0].url, 'https://page/private?token=x', '不得下载页面 URL')
 })
 
-test('save.download 无文件源时给空串，绝不回退到 url（页面 HTML）', async () => {
-  const seen = []
-  await executeAction('save.download', { url: 'https://page/private?token=x', download: (a) => seen.push(a) })
-  assert.equal(seen[0].url, '', '无文件源不得拿页面 url 顶替')
+test('save.download 无文件源时拒绝执行：不调注入实现、返回失败（绝不下到页面 HTML）', async () => {
+  let called = false
+  const result = await executeAction('save.download', {
+    url: 'https://page/private?token=x',
+    download: () => { called = true },
+  })
+  // 真判定：旧代码把空串传给 download，真实浏览器把 `a.href=''` 解析成当前文档 URL → 下到整页 HTML。
+  assert.equal(called, false, '无文件源时不得调用下载实现')
+  assert.equal(result.ok, false)
+  assert.equal(result.outcome, 'failed')
 })
 
-test('copy.link 空 url 稳健：execute 传空串而非 undefined（不得复制出字面量 "undefined"）', async () => {
+test('copy.link 无公开链时拒绝执行：不复制空串 / undefined / 私有页地址', async () => {
   let seen = 'SENTINEL'
-  await executeAction('copy.link', { copy: (t) => { seen = t } })
-  assert.equal(seen, '', '缺 url 时注入实现应收到空串，而不是 undefined')
+  const result = await executeAction('copy.link', { copy: (t) => { seen = t } })
+  assert.equal(seen, 'SENTINEL', '缺 url 时不得调用 copy（旧代码把空串复制出去，或复制出字面量 "undefined"）')
+  assert.equal(result.ok, false)
+  assert.equal(result.outcome, 'blocked')
+})
+
+test('S3 闸门（最低公共层）：copy.link 私有页 / token / 非允许域 / 空串均被拦，注入实现不被调用', async () => {
+  for (const url of ['https://fang.hxym18.com/ledger?token=secret', 'https://evil.com/x', '', undefined]) {
+    let called = 0
+    const r = await executeAction('copy.link', { url, copy: () => { called += 1 } })
+    assert.equal(called, 0, `不得复制：${String(url)}`)
+    assert.equal(r.ok, false)
+    assert.equal(r.outcome, 'blocked', `${String(url)} 应判 blocked`)
+    assert.equal(r.mode, 'invoked')
+  }
+})
+
+test('S3 闸门：share.system 无 files 用 url → 私有页被拦；有 files 用文件 → 不误拦', async () => {
+  let calls = 0
+  const share = () => { calls += 1; return Promise.resolve() }
+  const blocked = await executeAction('share.system', { url: 'https://fang.hxym18.com/p?token=s', share })
+  assert.equal(calls, 0, '私有 url 不得系统分享')
+  assert.equal(blocked.outcome, 'blocked')
+  const ok = await executeAction('share.system', { url: 'https://fang.hxym18.com/p?token=s', files: [{ name: 'p.png' }], share })
+  assert.equal(calls, 1, '有 files 时走文件、不看 url')
+  assert.equal(ok.ok, true)
+})
+
+test('S3 闸门：卡片动作（自组 UI 直调 executeAction）私有 url 被拦，不给引导', async () => {
+  for (const action of ['share.card.wx', 'share.card.miniapp']) {
+    const r = await executeAction(action, { url: 'https://fang.hxym18.com/p?token=s' })
+    assert.equal(r.ok, false, `${action} 私有 url 必须被拦`)
+    assert.equal(r.outcome, 'blocked', `${action} 不得报 guidance`)
+    assert.equal(r.mode, 'invoked', '被拦不是引导')
+  }
+})
+
+test('S3 闸门：deps.publicHosts 追加站点公开域后放行；未声明仍被拦', async () => {
+  let seen = null
+  const ok = await executeAction('copy.link', {
+    url: 'https://cdn.example.com/s/1',
+    publicHosts: ['cdn.example.com'],
+    copy: (t) => { seen = t },
+  })
+  assert.equal(seen, 'https://cdn.example.com/s/1')
+  assert.equal(ok.ok, true)
+  const blocked = await executeAction('copy.link', { url: 'https://cdn.example.com/s/1', copy: () => {} })
+  assert.equal(blocked.outcome, 'blocked')
 })
 
 test('save.download 用 files[0] 现造 blob 后释放对象 URL（不泄漏）', async () => {

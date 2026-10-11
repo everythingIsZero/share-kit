@@ -524,3 +524,39 @@ test('mount：图片预览层过滤长按项后，首个剩余按钮顺延为主
     globalThis.File = prevFile
   }
 })
+
+test('share-kit/ui 运行期导出与 README/类型承诺一致：isPublicShareUrl 可用、内部常量不外泄', async () => {
+  const ui = await import('../../src/ui/index.mjs')
+  assert.equal(typeof ui.isPublicShareUrl, 'function', '`share-kit/ui` 运行期必须导出 isPublicShareUrl')
+  assert.equal(ui.isPublicShareUrl('https://share.hxym18.com/s/1'), true)
+  assert.equal(ui.isPublicShareUrl('https://fang.hxym18.com/p?token=s'), false)
+  assert.equal(typeof ui.mountShare, 'function')
+  // 内部常量不再经 `export * from './mount'` 泄漏为 ui 公共 API（与收窄后的 index.d.ts 对齐）
+  assert.equal('GUIDANCE_COPY_ID' in ui, false)
+  assert.equal('SENSITIVE_QUERY_KEYS' in ui, false)
+  assert.equal('actionUsesShareUrl' in ui, false)
+})
+
+test('mount：无下载源（无 files / fileUrl）不列 save.download——A 缺陷真实触发路径（image 预览层）', () => {
+  // 桌面 Chromium + 探得 a[download]：旧代码信号兜底会把 save.download 列为主推荐，
+  // 点击后 a.href='' 被浏览器解析成当前文档 URL → 下到整页 HTML。
+  setUA('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')
+  documentStub.body.children = []
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'image', url: 'https://share.hxym18.com/s/i', imageUrl: 'https://share.hxym18.com/s/i.png' }, // 无 files / fileUrl
+  })
+  fire(target.children[0], 'click') // image + 有图 → 预览层
+  assert.equal(findAction(documentStub.body, 'save.download'), null, '无下载源不得列 save.download')
+  handle.unmount()
+})
+
+test('mount：无下载源的 video 也不列 save.download（未知环境信号兜底同样被守卫）', () => {
+  setUA('') // 未知环境：能力表给不出更强动作，旧代码靠信号兜底把 save.download 列为主推荐
+  documentStub.body.children = []
+  const target = makeEl('div')
+  const handle = mountShare(target, { artifact: { kind: 'video', url: 'https://share.hxym18.com/s/v' } })
+  fire(target.children[0], 'click') // video 无图 → Action Sheet
+  assert.equal(findAction(documentStub.body, 'save.download'), null, '无下载源不得列 save.download')
+  handle.unmount()
+})

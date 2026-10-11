@@ -9,6 +9,7 @@
  */
 
 import { classifyOutcome } from '../core/index.mjs'
+import { actionUsesShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
 
 /**
  * 动作 → 依赖键的映射；值为 null 表示「引导类动作」，不需要外部调用。
@@ -47,6 +48,17 @@ function revokeBlobUrlLater(url) {
 function invoke(actionId, deps) {
   const depKey = ACTION_DEP_MAP[actionId]
   if (depKey === undefined) throw new TypeError(`未知动作：${actionId}`)
+
+  // S3：动作用到分享链（url）却拿不到公开分享链时**拒绝执行**——绝不把私有页 / 带 token 的地址
+  // 复制、系统分享或写进微信卡片。闸门必须落在最低公共层：自组 UI（`listActions` + `executeAction`）
+  // 与 React `ShareTrigger` 都直接走本函数，从而自动受控，不经 `mountShare` 也绕不过去。
+  if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, deps.publicHosts)) {
+    const error = new Error('非公开分享链：拒绝执行（S3）')
+    // 复用 classifyOutcome 的既有语义（NotAllowedError → blocked），不新增 outcome 种类
+    error.name = 'NotAllowedError'
+    throw error
+  }
+
   if (depKey === null) return undefined
   const fn = deps[depKey]
   if (typeof fn !== 'function') throw new TypeError(`动作 ${actionId} 缺少注入实现：${depKey}`)
@@ -64,9 +76,15 @@ function invoke(actionId, deps) {
     return fn({ url: deps.url, title: deps.title, text: deps.text })
   }
   if (depKey === 'download') {
-    // save.download：下载源是**文件**（files[0] → fileUrl），绝不拿页面 url 顶替——否则下到的是页面 HTML。
+    // save.download：下载源是**文件**（files[0] → fileUrl）。两者都缺时**拒绝执行**——
+    // `a.href = ''` 在真实浏览器会解析成当前文档 URL，点「保存图片」实际下到整页 HTML（A 缺陷）。
+    // 绝不拿页面 url 顶替，也不把空串交给注入实现。
     const file = deps.files && deps.files[0]
-    const url = file ? URL.createObjectURL(file) : deps.fileUrl || ''
+    const fileUrl = typeof deps.fileUrl === 'string' ? deps.fileUrl : ''
+    if (!file && fileUrl.length === 0) {
+      throw new TypeError('save.download 缺少文件源（files[0] 或 fileUrl），拒绝下载页面 HTML')
+    }
+    const url = file ? URL.createObjectURL(file) : fileUrl
     const pending = fn({ url, filename: deps.filename })
     // 释放：a[download] 已由同步段发起，现造的对象 URL 用毕即回收（约定同 render-dom/export.mjs），
     // 延后一个宏任务，避免个别浏览器在 click 后立刻 revoke 会中断下载。
@@ -89,10 +107,14 @@ function toResult(actionId, error) {
 }
 
 /**
- * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, fileUrl, files, title, text }`。
+ * 执行一个动作。`deps` 为注入实现：`{ share, copy, download, openExternal, url, fileUrl, files, title, text, publicHosts }`。
  *
  * `openExternal` 是「去外部浏览器」引导按钮的注入点：本函数**不会自动调用它**——
  * 自动跳浏览器会打断用户，是否提供这一步由调用方接线。
+ *
+ * S3 闸门（最低公共层）：用到分享链的动作（`copy.link` / `share.card.wx` / `share.card.miniapp` /
+ * 无 files 的 `share.system`）在 `url` 不是公开分享链时**不调用注入实现**，直接返回
+ * `{ ok:false, outcome:'blocked' }`（`NotAllowedError` 语义）。`publicHosts` 可**追加**站点公开域。
  *
  * 返回 `{ ok, outcome, action, mode }`；`mode` 为 'invoked'（调用了注入实现）或 'guidance'（只给引导）。
  */
