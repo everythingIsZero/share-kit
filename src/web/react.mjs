@@ -63,7 +63,7 @@ const STATUS_VIEW = Object.freeze({
 /**
  * 触发态归约（纯函数）。`state` 可以是状态字符串或上一次的视图对象。
  * - `{ type: 'click' }`：进入已触发态（禁用 + 进度指示，不改文案、不弹任何东西）；重复点击保持原状；
- * - `{ type: 'settle', outcome }` 或 `{ type: 'done' | 'fail' | 'blocked' | 'cancelled' }`：按结果落反馈；
+ * - `{ type: 'settle', outcome }` 或 `{ type: 'done' | 'fail' | 'blocked' | 'cancelled' | 'guidance' }`：按结果落反馈（guidance 复原按钮、不进禁用态）；
  * - `{ type: 'reset' }`：复原（组件卸载时必须派发，防残留禁用态）。
  */
 export function reduceTrigger(state, event) {
@@ -76,6 +76,9 @@ export function reduceTrigger(state, event) {
   const outcome = type === 'settle' ? event.outcome : type
   if (outcome === 'done') return viewOf('done', planFeedback('done'))
   if (outcome === 'cancelled') return { ...IDLE_VIEW, severity: planFeedback('cancelled').severity }
+  // 引导类动作（share.card.wx / miniapp / preview.longpress）不是 done 也不是失败：复原按钮即可，
+  // 该怎么做已由 plan.hint 的事前引导展示，这里绝不能留在禁用态（S11）。
+  if (outcome === 'guidance') return { ...IDLE_VIEW }
   // 'fail' 是 'failed' 的简写：两者都给一步引导（planFeedback 对未知结果也按失败处理）
   if (outcome === 'fail' || outcome === 'failed' || outcome === 'blocked') return viewOf('failed', planFeedback(outcome))
 

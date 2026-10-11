@@ -86,6 +86,7 @@ export const COPY = Object.freeze({
   'card-wx-link': Object.freeze({ id: 'card-wx-link', text: '点右上角「···」，把这一页发给朋友', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   // 小程序 web-view 里 H5 调不起原生分享，转发由**宿主小程序自带**的分享菜单负责，故给这一步引导。
   // 与 card-wx-link 分开：两者宿主菜单位置/措辞不同，tip 按动作选文案（S11）。
+  // 注：share.card.miniapp 目前在能力表所有行都不可用（暂不可达）；保留此条供未来开放时使用。
   'card-miniapp-link': Object.freeze({ id: 'card-miniapp-link', text: '点右上角「···」，用小程序自带的分享', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'longpress-image': Object.freeze({ id: 'longpress-image', text: '长按这张图，选保存到相册', params: Object.freeze([]), tier: 'pre', verifiedMenuItem: null }),
   'external-open-video': Object.freeze({ id: 'external-open-video', text: '这条视频在{container}里存不下来，复制链接到手机浏览器打开', params: Object.freeze(['container']), tier: 'pre', verifiedMenuItem: null }),

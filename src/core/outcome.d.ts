@@ -2,8 +2,8 @@
  * outcome.d.ts — share-kit core 结果分类与事件类型（手写声明，与 outcome.mjs 同步维护）
  */
 
-/** 结果四类 */
-export type OutcomeKind = 'done' | 'cancelled' | 'blocked' | 'failed'
+/** 结果五类：引导类动作不报 done，如实标 guidance（S11） */
+export type OutcomeKind = 'done' | 'cancelled' | 'blocked' | 'failed' | 'guidance'
 
 /** 反馈落点（恒为触发元素本身） */
 export type FeedbackSurface = 'trigger'

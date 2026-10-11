@@ -121,5 +121,20 @@ test('取消不计失败：severity 为 none，且分类枚举完整', () => {
   assert.equal(planFeedback('cancelled').severity, 'none')
   assert.equal(planFeedback('done').severity, 'info')
   assert.equal(planFeedback('failed').severity, 'fail')
-  assert.deepEqual([...OUTCOME_KINDS], ['done', 'cancelled', 'blocked', 'failed'])
+  assert.deepEqual([...OUTCOME_KINDS], ['done', 'cancelled', 'blocked', 'failed', 'guidance'])
+})
+
+test('guidance 是一等结果：buildEvent 不被转 failed，planFeedback 非失败口径', () => {
+  // 引导类动作（S11）：事件 outcome 如实记 guidance，不得被 buildEvent 强转成 failed
+  const event = buildEvent({ action: 'share.card.wx', outcome: 'guidance' })
+  assert.equal(event.outcome, 'guidance')
+  assert.notEqual(event.outcome, 'failed')
+
+  const plan = planFeedback('guidance')
+  assert.equal(plan.surface, 'trigger')
+  assert.equal(plan.visual, 'inline-guidance')
+  assert.equal(plan.severity, 'info', '引导不是失败，不得给 fail 强度')
+
+  // classifyOutcome 只对错误分类，不产生 guidance（guidance 由 executeAction 显式标注）
+  assert.notEqual(classifyOutcome({ ok: true }), 'guidance')
 })

@@ -33,6 +33,11 @@ test('触发态与失败态归约：点击进已触发态，失败给一步引�
   assert.equal(settled.status, 'idle')
   assert.equal(settled.disabled, false)
 
+  // 引导类结果：不是 done、不是失败，按钮必须复原为可再点（不得卡在禁用态）
+  const guided = reduceTrigger('running', { type: 'settle', outcome: 'guidance' })
+  assert.equal(guided.disabled, false, 'guidance 不得卡禁用')
+  assert.equal(guided.status, 'idle')
+
   assert.deepEqual(reduceTrigger('done', { type: 'reset' }), { ...IDLE_VIEW })
 })
 

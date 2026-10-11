@@ -2,15 +2,16 @@
  * outcome.mjs — 结果分类与反馈口径（R9、R12、R17）
  *
  * 三件事：
- * 1. `classifyOutcome` 把执行结果分成四类：成功 / 用户取消 / 被阻断 / 失败；
+ * 1. `classifyOutcome` 把**错误**结果分成四类：成功 / 用户取消 / 被阻断 / 失败；
+ *    `guidance`（引导类动作）不由错误分类产生，而由 `executeAction` 对引导类动作显式标注（S11）；
  * 2. `planFeedback` 给出「反馈落在哪、什么形态」的计划——落点恒为触发元素本身，不用浮层提示；
  * 3. `buildEvent` 产出固定四字段的事件对象，只收指纹投影，**不收原始信号**（R17）。
  *
  * 红线（R12）：本模块不导出任何发放权益的入口，也不建任何存储；分享结果只做归因。
  */
 
-/** 结果四类 */
-export const OUTCOME_KINDS = Object.freeze(['done', 'cancelled', 'blocked', 'failed'])
+/** 结果五类：引导类动作不报 done，如实标 guidance（S11） */
+export const OUTCOME_KINDS = Object.freeze(['done', 'cancelled', 'blocked', 'failed', 'guidance'])
 
 /** 反馈落点：只有「触发元素本身」一种（R9，不弹浮层） */
 export const FEEDBACK_SURFACES = Object.freeze(['trigger'])
@@ -62,6 +63,9 @@ export function planFeedback(kind) {
       return { surface: 'trigger', severity: 'none', visual: 'progress', counter: null }
     case 'done':
       return { surface: 'trigger', severity: 'info', visual: 'inline-result', counter: { scope: 'session', max: 1 } }
+    case 'guidance':
+      // 引导类动作给的是「怎么做」的一步说明，不是结果、也不是失败（S11）：落按钮、强度 info、形态 inline-guidance
+      return { surface: 'trigger', severity: 'info', visual: 'inline-guidance', counter: null }
     case 'cancelled':
       return { surface: 'trigger', severity: 'none', visual: 'inline-result', counter: null }
     case 'blocked':
