@@ -2,6 +2,14 @@
 
 本仓遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式，版本语义按 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- **`RawSignals` 类型声明补漏：`hasDownloadSource` / `hasShare`**（v0.7.0 起存在）。两者运行时早已在用——`hasDownloadSource` 由 `mountShare` 按 artifact 给出、`decide` 读它闸 `save.download`（空源会下到整页 HTML），`hasShare` 由 `share-kit/web` 的 `collectSignals` 产出、`decide` 读它闸 `share.system`——但手写声明漏了它们，导致 **TS 消费站传对字段也报 `Object literal may only specify known properties`**。补声明 + README 增两行信号说明。
+- **新增漂移守卫 `test/meta/declaration-parity.test.mjs`**（3 断言）：`RawSignals` 声明 ⊇ 采集侧 `collectSignals` 产出 ∪ core 读取（含 `decide` 的 `s.*` 别名）；锚点（接口块、别名绑定）缺失即抛，不静默假绿；声明多出的键显式列出待人工确认。此类漏键此前**不会让任何测试变红**。
+  建议发版：**v0.7.1**（patch；无行为变更，仅类型声明 + 测试 + 文档）。
+
 ## [0.7.0] - 2026-10-12
 
 ### Added

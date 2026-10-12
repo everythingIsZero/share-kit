@@ -32,6 +32,10 @@ bun add github:everythingIsZero/share-kit
 | `decideAction({ fingerprint, artifactKind, signals, cardShare? })` | → 执行计划 `{ primary, hint, fallback, reason }`（主推荐动作）；`cardShare` 为真（url 是带卡片短链）时微信内 link 的事前说明改用 `card-wx-shortlink` |
 | `listActions({ fingerprint, artifactKind, signals, cardShare? })` | → 可用方式列表 `{ actions: [{ id, isPrimary }], reason }`（Action Sheet 决策单源，偏好序）；`cardShare` 不影响列表（动作可用性只看能力表 + 信号） |
 | `signals.hasFiles` | artifact **是否真带文件**（适配包按产物给出）：`save.album` / 带文件的 `share.system` 需 `hasFiles === true` 才入列 |
+| `signals.hasDownloadSource` | artifact **是否有下载源**（`files[0]` 或 `fileUrl`）：`save.download` 需它不是 `false` 才入列——空源在真实浏览器会下到整页 HTML；未传不闸（旧调用方/首帧计划） |
+| `signals.hasShare` | 宿主**有没有 `navigator.share`**（只回答存在性）：link 产物的 `share.system` 靠它入列 |
+
+> `RawSignals` 的键 = 采集侧（`share-kit/web` 的 `collectSignals`）产出 ∪ core 读取；**声明与运行时不得漂移**，由 `test/meta/declaration-parity.test.mjs` 钉住（声明漏键即红）。
 | `capabilityRowFor(fingerprintOrKey)` | 42 格能力表查询（container × os × 七动作，每格带可核对的证据来源键 `SOURCES`） |
 | `renderCopy(copyId, params)` / `resolveCopy(id, override)` | 文案渲染与项目覆盖（覆盖必须附原因） |
 | `classifyOutcome(errorOrResult)` / `planFeedback(kind)` | 结果分类（成功 / 取消 / 阻断 / 失败 / **引导**）与反馈计划 |
