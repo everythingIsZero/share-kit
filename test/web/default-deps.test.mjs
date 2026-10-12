@@ -6,7 +6,8 @@
  * 即可，不必逐站手写。判定作用：
  *   - 有 files 只传文件、无 files 才用 url（防 iOS 面板把链接当主体）；
  *   - 下载走 `a[download]`，空源**不造空 anchor**（空 href 会被解析成当前文档 URL）；
- *   - 复制优先剪贴板、失败落 execCommand，空文本静默返回（绝不复制字面量 "undefined"）。
+ *   - 复制优先剪贴板、失败落 execCommand；**两条路都失败抛错**（不吞失败，不被 executeAction 归为 done），
+ *     空文本静默返回（绝不复制字面量 "undefined"）。
  */
 
 import { test } from 'node:test'
@@ -21,6 +22,7 @@ const clicked = []
 const textareas = []
 let clipboardText = null
 let execCopied = null
+let execOk = true
 
 const docStub = {
   body: {
@@ -52,6 +54,7 @@ const docStub = {
   },
   execCommand() {
     execCopied = textareas.length ? textareas[textareas.length - 1].value : null
+    return execOk
   },
 }
 
@@ -152,10 +155,36 @@ test('defaultCopy：优先用剪贴板', async () => {
 test('defaultCopy：剪贴板失败落 execCommand 兜底', async () => {
   clipboardText = null
   execCopied = null
+  execOk = true
   textareas.length = 0
   setNavigator({ clipboard: { writeText: async () => { throw new Error('denied') } } })
   await defaultCopy('https://share.hxym18.com/s/2')
   assert.equal(execCopied, 'https://share.hxym18.com/s/2', '剪贴板失败应落 textarea + execCommand')
+})
+
+test('defaultCopy：剪贴板与 execCommand 都失败 → 抛错（不吞失败、不被当成成功）', async () => {
+  clipboardText = null
+  execCopied = null
+  textareas.length = 0
+  // 剪贴板被拒 + execCommand 返回 false（真实浏览器：命令未执行）
+  execOk = false
+  setNavigator({ clipboard: { writeText: async () => { throw new Error('denied') } } })
+  await assert.rejects(defaultCopy('https://share.hxym18.com/s/3'), /copy-failed/)
+  assert.equal(execCopied, 'https://share.hxym18.com/s/3', '应确实尝试过 execCommand（只是失败）')
+  execOk = true
+})
+
+test('defaultCopy：无剪贴板且 execCommand 抛错 → 抛错（不假报成功）', async () => {
+  execCopied = null
+  textareas.length = 0
+  setNavigator({}) // 无 navigator.clipboard
+  const saved = docStub.execCommand
+  docStub.execCommand = () => { throw new Error('not supported') }
+  try {
+    await assert.rejects(defaultCopy('https://share.hxym18.com/s/4'), /copy-failed/)
+  } finally {
+    docStub.execCommand = saved
+  }
 })
 
 test('defaultCopy：空文本静默返回，不复制字面量 "undefined"', async () => {

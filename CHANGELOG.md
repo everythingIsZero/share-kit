@@ -6,8 +6,8 @@
 
 ### Added
 
-- **`share-kit/web` 浏览器默认 deps（SH-1）**：新增 `systemShare`（系统分享，有 files 只传文件 / 无 files 才用 url，接口缺席抛错）、`triggerDownload`（`a[download]` 下载，接受对象 `{url,filename}` 或位置式 `(url,filename)`，空源静默返回）、`defaultCopy`（剪贴板优先、失败落 `execCommand`）。fang / zitie / nuantie 曾各写一遍的分享执行胶水自此单源；`mountShare` 内部改取同一实现（删本地 `defaultDownload` / `defaultCopy` 副本），行为不变。
-- **`share-kit/web` 结果 → 反馈映射（SH-4）**：新增 `feedbackOf(result, guidanceText?) → { tone, text }` 与 `FEEDBACK_TONES`——下沉 fang `feedbackOf` / nuantie `feedbackFor` 的同一套规则：引导给引导文案（缺则回退 `fail-retry`）；只有 `save.download` / `copy.link` 宣称结果（走系统面板的不宣称，R7）；取消静默、被阻断 / 失败给一步重试。
+- **`share-kit/web` 浏览器默认 deps（SH-1）**：新增 `systemShare`（系统分享，有 files 只传文件 / 无 files 才用 url，接口缺席抛错）、`triggerDownload`（`a[download]` 下载，接受对象 `{url,filename}` 或位置式 `(url,filename)`，空源静默返回）、`defaultCopy`（剪贴板优先、失败落 `execCommand`；**两条路都失败即抛错**，对齐 fang `copyText` + `copyOrThrow` 的原实现——静默返回会被 `executeAction` 当成成功、界面假报「链接已复制」）。fang / zitie / nuantie 曾各写一遍的分享执行胶水自此单源；`mountShare` 内部改取同一实现（删本地 `defaultDownload` / `defaultCopy` 副本），结果反馈改走 `feedbackOf`（删本地结果文案表，含硬编码的「已完成 · 可再试一次」/「没完成，再点一次试试」）。
+- **`share-kit/web` 结果 → 反馈映射（SH-4）**：新增 `feedbackOf(result, guidanceText?) → { tone, text }` 与 `FEEDBACK_TONES`——**从 fang `feedbackOf` 口径收敛**：引导给引导文案（缺则回退 `fail-retry`）；只有 `save.download` / `copy.link` 宣称结果（走系统面板的不宣称，R7）；取消静默、被阻断 / 失败给一步重试。nuantie `feedbackFor` 与 fang 不同（曾对 `save.album` 宣称 `done-saved`、引导缺文案返回空串），本包按 R7 去掉这些差异。
 
 ### Notes
 

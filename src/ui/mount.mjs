@@ -17,7 +17,7 @@
 
 import { listActions, normalizeFingerprint, renderCopy, resolveHintCopyId } from '../core/index.mjs'
 import { actionUsesShareUrl, isCardShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
-import { collectSignals, defaultCopy, executeAction, systemShare, triggerDownload } from '../web/index.mjs'
+import { collectSignals, defaultCopy, executeAction, feedbackOf, systemShare, triggerDownload } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
 
@@ -31,6 +31,7 @@ export { SENSITIVE_QUERY_KEYS, DEFAULT_PUBLIC_HOSTS, isPublicShareUrl, isCardSha
 /**
  * 浏览器默认 deps（系统分享 / a[download] 下载 / 剪贴板复制）单源在 `web/default-deps.mjs`（SH-1），
  * 本文件直接取用：`deps.share = systemShare`、`deps.download = triggerDownload`、`deps.copy = defaultCopy`。
+ * 结果 → 按钮反馈单源在 `web/feedback.mjs` 的 `feedbackOf`（SH-4），`run` 不再自写结果文案表。
  */
 
 /** 长按引导层的图源：artifact.imageUrl 优先，否则用首个 File 现造 blob URL */
@@ -142,14 +143,6 @@ export function mountShare(target, options = {}) {
     if (!disposed) button.textContent = text
   }
 
-  const doneLabel = (actionId) => {
-    if (actionId === 'copy.link') return renderCopy('done-copied')
-    // 只有 save.download（a[download]）落点确定，能如实报「已保存到本机」；
-    // save.album / share.system 走系统面板，面板里发生什么我们不知道（R7），不得报 done。
-    if (actionId === 'save.download') return renderCopy('done-saved')
-    return '已完成 · 可再试一次'
-  }
-
   function run(actionId) {
     // S3：非公开链（私有页 / 带 token）不得复制或分享出去——拒绝执行并如实反馈，绝不静默外泄
     if (actionUsesShareUrl(actionId, deps.files) && !isPublicShareUrl(deps.url, publicHosts, sensitiveQueryKeys)) {
@@ -164,21 +157,17 @@ export function mountShare(target, options = {}) {
     setLabel('正在处理…')
     Promise.resolve(executeAction(actionId, deps)).then((result) => {
       if (disposed) return
-      if (result.ok && result.mode === 'guidance') {
-        // 引导类动作**不报「已完成」**：卡片由宿主菜单转发、长按由用户完成，界面只说该怎么做。
-        // 文案 id 按 result.action 选（wx / miniapp 各自的引导不同），文案本体在 core。
-        // M2-6：url 是带卡片短链时，share.card.wx 的 tip 经 core 单源换成「链接自带卡片」那条。
-        const tipText = renderCopy(resolveHintCopyId(GUIDANCE_COPY_ID[result.action], isCardShareUrl(deps.url, publicHosts, sensitiveQueryKeys)))
-        setLabel(tipText || initialLabel)
-        if (tipText) showTipBar(tipText)
-      } else if (result.ok) {
-        setLabel(doneLabel(result.action))
-      } else if (result.outcome === 'cancelled') {
-        // 用户取消不是失败：静默复原按钮，不显示「没完成」（AbortError 与真失败分开归因，R8）
-        setLabel(initialLabel)
-      } else {
-        setLabel('没完成，再点一次试试')
-      }
+      // 结果 → 按钮反馈单源在 web `feedbackOf`（SH-4），mount 不再自写文案表：
+      // 引导类给引导文案（id 按 result.action 选，文案本体在 core；带卡片短链经 core 单源换「链接自带卡片」）；
+      // 只有落点确定的动作宣称结果（save.download / copy.link），走系统面板的与用户取消给空文案 → 复原按钮；
+      // 失败 / 被阻断给一步重试。空文案一律复原为初始按钮文案，绝不报「已完成」。
+      const tipText =
+        result.mode === 'guidance'
+          ? renderCopy(resolveHintCopyId(GUIDANCE_COPY_ID[result.action], isCardShareUrl(deps.url, publicHosts, sensitiveQueryKeys)))
+          : ''
+      const fb = feedbackOf(result, tipText)
+      setLabel(fb.text || initialLabel)
+      if (fb.tone === 'guide' && fb.text) showTipBar(fb.text)
       if (typeof onResult === 'function') onResult(result)
     })
   }

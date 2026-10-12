@@ -24,6 +24,7 @@ export declare function triggerDownload(url: string, filename?: string): void
 
 /**
  * 复制链接默认实现（注入给 `executeAction` 的 `copy`）。
- * 剪贴板优先、失败落 `execCommand`；空文本静默返回。
+ * 剪贴板优先、失败落 `execCommand`；两条路都失败**抛错**（由 executeAction 归为失败，不假报成功）。
+ * 空文本静默返回（空源守卫，非失败）。
  */
 export declare function defaultCopy(text: string): Promise<void>

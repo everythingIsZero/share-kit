@@ -54,12 +54,13 @@ bun add github:everythingIsZero/share-kit
 | `createReporter(send)` | fire-and-forget 上报器（失败不冒泡不重试） |
 | `systemShare(payload)` | **默认 share dep**：系统分享（有 files 只传文件、无 files 才用 url；接口缺席抛错由 executeAction 归为失败） |
 | `triggerDownload(payloadOrUrl, filename?)` | **默认 download dep**：`a[download]` 点击下载（对象 `{url,filename}` 或位置式 `(url,filename)`；空源静默返回） |
-| `defaultCopy(text)` | **默认 copy dep**：剪贴板优先、失败落 `execCommand`；空文本静默返回 |
+| `defaultCopy(text)` | **默认 copy dep**：剪贴板优先、失败落 `execCommand`；**两条路都失败即抛错**（由 `executeAction` 归为失败，不假报「链接已复制」）；空文本静默返回 |
 | `feedbackOf(result, guidanceText?)` / `FEEDBACK_TONES` | **结果 → 按钮反馈映射**（`{ tone: 'busy'\|'guide'\|'ok'\|'fail', text }`）：引导给引导文案；只有落点确定的动作宣称结果；取消静默、失败给一步重试 |
 
 > **SH-1 / SH-4（单源约定）**：自组 UI 时不必逐站手写分享执行胶水——
 > `executeAction(id, { share: systemShare, download: triggerDownload, copy: defaultCopy, url, files, filename })`，
-> 再把结果交 `feedbackOf(result, hintTextOf(plan))` 落反馈。`mountShare` / `ShareTrigger` 内部同样取用这一份实现。
+> 再把结果交 `feedbackOf(result, hintTextOf(plan))` 落反馈。`mountShare` 内部取用同一份默认 deps，
+> 结果反馈也走 `feedbackOf`（单一结果文案表）；React `ShareTrigger` 的按钮视图态走 core `planFeedback` 归约，不经 `feedbackOf`。
 
 ### `share-kit/web/react`（React 绑定）
 
@@ -165,7 +166,7 @@ else console.warn('[share] 短链不可用，降级站内链', r.outcome)   // �
 |---|---|---|
 | 调用 `mountShare`（挂载） | ① 挂载点 `target` 末尾插入 1 个分享按钮（`button.share-kit-trigger`）；② `head` 插入 1 份样式表（id=`share-kit-ui-style`，幂等，全页仅一份） | 不改页面任何已有 DOM 与样式；不挂 `window` 全局变量；不监听全局事件 |
 | 用户点击分享按钮 | **图片产物先弹海报预览层**：全屏大图 + 该环境真实可用方式的按钮行（主推荐高亮，长按可保存的环境附长按提示，长按保存即大图本身）；链接 / 视频产物（无图可显）弹底部 Action Sheet。浮层插在 `body` 末尾（fixed + 高 z-index），关闭后约 260ms 自动从 DOM 移除 | 不跳页不刷新；浮层用的图是你传入的本地 blob，不发网络请求 |
-| 用户选定方式后 | 按方式执行：系统分享面板 / `a[download]` 下载 / 剪贴板复制（失败自动落 execCommand）；结果反馈写在**按钮文案**上 | 不用 toast 弹窗；SDK 不发任何统计请求（埋点走你传入的 `onResult`） |
+| 用户选定方式后 | 按方式执行：系统分享面板 / `a[download]` 下载 / 剪贴板复制（失败自动落 execCommand，两条路都失败则如实报失败，不假报已复制）；结果反馈写在**按钮文案**上 | 不用 toast 弹窗；SDK 不发任何统计请求（埋点走你传入的 `onResult`） |
 | `unmount()`（卸载） | 按钮移除、事件解绑、浮层收起 | 页面其余部分与你接入前完全一致 |
 
 海报生成与 SDK 的边界：**SDK 不管海报怎么来**——你的页面用 `render-dom`（或任何方式）产出

@@ -63,8 +63,10 @@ export function triggerDownload(urlOrPayload, filenameArg) {
 
 /**
  * 复制链接默认实现（注入给 `executeAction` 的 `copy`）。
- * `clipboard.writeText` 优先，失败静默落 `execCommand`（微信内常见）；
- * 空文本静默返回——绝不把 `undefined` 强转成字面量 `"undefined"` 复制出去。
+ * `clipboard.writeText` 优先，失败落 `execCommand`（微信内常见）；
+ * **两条路都失败即抛错**——`executeAction` 按「有没有抛错」分类结果，静默返回会被当成成功、
+ * 界面假报「链接已复制」（对齐 fang `copyText` 返回 boolean + `copyOrThrow` 抛错的原实现）。
+ * 空文本静默返回——绝不把 `undefined` 强转成字面量 `"undefined"` 复制出去（空源守卫，非失败）。
  */
 export async function defaultCopy(text) {
   if (typeof text !== 'string' || text.length === 0) return
@@ -76,16 +78,21 @@ export async function defaultCopy(text) {
       /* 落 execCommand */
     }
   }
-  if (typeof document === 'undefined') return
+  // 非浏览器环境（无 document）没有第二条复制路径：如实抛错，不假报成功
+  if (typeof document === 'undefined') throw new Error('copy-failed：无可用剪贴板实现')
   const ta = document.createElement('textarea')
   ta.value = text
   ta.setAttribute('readonly', '')
   ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;'
   document.body.appendChild(ta)
   ta.select()
+  let ok = false
   try {
-    document.execCommand('copy')
+    ok = document.execCommand('copy')
+  } catch {
+    ok = false
   } finally {
     ta.remove()
   }
+  if (!ok) throw new Error('copy-failed')
 }

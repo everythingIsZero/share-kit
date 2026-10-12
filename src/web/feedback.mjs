@@ -1,8 +1,9 @@
 /**
  * feedback.mjs — 结果 → 按钮反馈映射（SH-4 下沉）
  *
- * fang `lib/share-actions.ts` 的 `feedbackOf` 与 nuantie `lib/share/h5.ts` 的 `feedbackFor`
- * 是同一套「结果 → 按钮反馈」规则，此文件单源。消费方拿到 `executeAction` 的结果后直接调用：
+ * 从 fang `lib/share-actions.ts` 的 `feedbackOf` 口径收敛（nuantie `lib/share/h5.ts` 的 `feedbackFor`
+ * 与 fang 不同：曾对 `save.album` 宣称 `done-saved`、引导缺文案返回空串；本包按 R7 去掉），此文件单源。
+ * 消费方拿到 `executeAction` 的结果后直接调用：
  *
  * ```js
  * const fb = feedbackOf(result, hintTextOf(plan)) // { tone, text }

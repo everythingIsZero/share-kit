@@ -1,7 +1,8 @@
 /**
  * feedback.test.mjs — 结果 → 按钮反馈映射（SH-4）
  *
- * 下沉自 fang `share-actions.ts` 的 `feedbackOf` 与 nuantie `share/h5.ts` 的 `feedbackFor`：
+ * 从 fang `share-actions.ts` 的 `feedbackOf` 口径收敛（nuantie `share/h5.ts` 的 `feedbackFor` 与 fang 不同：
+ * 曾对 `save.album` 宣称 `done-saved`、引导缺文案返回空串；本包按 R7 去掉）：
  * 结果（`ExecuteResult`）→ `{ tone, text }` 单源在包内。判定作用（与红线 R7/R8/S11 对齐）：
  *   - 引导类动作给引导文案，绝不报「已完成」；
  *   - 只有落点确定的动作（save.download / copy.link）才宣称结果，走系统面板的不宣称；

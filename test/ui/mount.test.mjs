@@ -93,6 +93,7 @@ function findAction(root, id) {
 const PAGE_URL = 'https://page/private?token=secret'
 
 let copied = null
+let execOk = true
 const textareas = []
 const downloaded = []
 
@@ -113,6 +114,7 @@ const documentStub = {
   removeEventListener() {},
   execCommand() {
     copied = textareas.length ? textareas[textareas.length - 1].value : null
+    return execOk
   },
 }
 
@@ -135,6 +137,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0))
 beforeEach(() => {
   documentStub.body.children = []
   copied = null
+  execOk = true
   downloaded.length = 0
 })
 
@@ -309,6 +312,28 @@ test('mount：公开短链照常复制（校验不误伤合法分享链）', asy
   fire(target.children[0], 'click')
   await tick()
   assert.equal(copied, 'https://share.hxym18.com/s/app/ok')
+  handle.unmount()
+})
+
+test('mount：宿主复制失败（剪贴板与 execCommand 都失败）→ 不归 done、不假报「链接已复制」', async () => {
+  // 判定作用：defaultCopy 静默吞失败时，executeAction 会归 done，按钮假报「链接已复制」；
+  // 本用例把 execCommand 置为失败，断言结果如实归 failed、按钮给一步重试。
+  setUA('') // 未知环境 link 只剩 copy.link 单一动作，点击直接执行
+  copied = null
+  execOk = false // execCommand 返回 false（真实浏览器：命令未执行）
+  const results = []
+  const target = makeEl('div')
+  const handle = mountShare(target, {
+    artifact: { kind: 'link', url: 'https://share.hxym18.com/s/app/fail' },
+    onResult: (r) => results.push(r),
+  })
+  fire(target.children[0], 'click')
+  await tick()
+  assert.equal(results.length, 1, '失败也要回报结果，不静默')
+  assert.equal(results[0].ok, false, '宿主失败不得归为成功')
+  assert.equal(results[0].outcome, 'failed', '宿主失败应归 failed（不得 done）')
+  assert.notEqual(target.children[0].textContent, renderCopy('done-copied'), '不得假报「链接已复制」')
+  assert.equal(target.children[0].textContent, renderCopy('fail-retry'), '失败应给一步重试')
   handle.unmount()
 })
 
