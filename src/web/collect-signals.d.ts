@@ -9,6 +9,8 @@ export interface CollectedSignals {
   ua: string
   maxTouchPoints: number | undefined
   isSecureContext: boolean
+  /** 宿主有没有 `navigator.share`（只回答存在性）：link 与带文件产物入列前都会看它 */
+  hasShare: boolean
   canShareFiles: boolean
   hasStandaloneDisplayMode: boolean
   hasDownloadAttr: boolean

@@ -30,7 +30,8 @@ export interface RawSignals {
   isSecureContext?: boolean
   /**
    * 宿主有没有 `navigator.share`（**只回答存在性**）。
-   * link 产物的 `share.system` 靠它入列；带文件的 share 另需 `canShareFiles` + `hasFiles`。
+   * `share.system`（所有产物）与 `save.album` 都靠它入列：`false` 即否决——宿主没有系统分享接口时，
+   * 列出来必点不动；带文件的 share 另需 `canShareFiles` + `hasFiles`。
    */
   hasShare?: boolean
   canShareFiles?: boolean
