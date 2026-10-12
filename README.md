@@ -52,6 +52,14 @@ bun add github:everythingIsZero/share-kit
 | `collectSignals(win?)` | 采集七项原始信号（只读不写宿主对象） |
 | `executeAction(actionId, deps)` | 执行动作（同步段发起调用、await 只在其后，保用户激活） |
 | `createReporter(send)` | fire-and-forget 上报器（失败不冒泡不重试） |
+| `systemShare(payload)` | **默认 share dep**：系统分享（有 files 只传文件、无 files 才用 url；接口缺席抛错由 executeAction 归为失败） |
+| `triggerDownload(payloadOrUrl, filename?)` | **默认 download dep**：`a[download]` 点击下载（对象 `{url,filename}` 或位置式 `(url,filename)`；空源静默返回） |
+| `defaultCopy(text)` | **默认 copy dep**：剪贴板优先、失败落 `execCommand`；空文本静默返回 |
+| `feedbackOf(result, guidanceText?)` / `FEEDBACK_TONES` | **结果 → 按钮反馈映射**（`{ tone: 'busy'\|'guide'\|'ok'\|'fail', text }`）：引导给引导文案；只有落点确定的动作宣称结果；取消静默、失败给一步重试 |
+
+> **SH-1 / SH-4（单源约定）**：自组 UI 时不必逐站手写分享执行胶水——
+> `executeAction(id, { share: systemShare, download: triggerDownload, copy: defaultCopy, url, files, filename })`，
+> 再把结果交 `feedbackOf(result, hintTextOf(plan))` 落反馈。`mountShare` / `ShareTrigger` 内部同样取用这一份实现。
 
 ### `share-kit/web/react`（React 绑定）
 
@@ -316,7 +324,7 @@ open http://localhost:8899/demo/index.html
 
 ```bash
 bun install     # 安装依赖（注意：bun add 会把 optional peer 的版本号清空，见下）
-make test       # 跑全部测试（node:test，191 条）
+make test       # 跑全部测试（node:test，222 条）
 make lint       # node --check 所有源文件
 ```
 

@@ -4,11 +4,14 @@
 
 ## [Unreleased]
 
-## [Unreleased]
+### Added
 
-## [Unreleased]
+- **`share-kit/web` 浏览器默认 deps（SH-1）**：新增 `systemShare`（系统分享，有 files 只传文件 / 无 files 才用 url，接口缺席抛错）、`triggerDownload`（`a[download]` 下载，接受对象 `{url,filename}` 或位置式 `(url,filename)`，空源静默返回）、`defaultCopy`（剪贴板优先、失败落 `execCommand`）。fang / zitie / nuantie 曾各写一遍的分享执行胶水自此单源；`mountShare` 内部改取同一实现（删本地 `defaultDownload` / `defaultCopy` 副本），行为不变。
+- **`share-kit/web` 结果 → 反馈映射（SH-4）**：新增 `feedbackOf(result, guidanceText?) → { tone, text }` 与 `FEEDBACK_TONES`——下沉 fang `feedbackOf` / nuantie `feedbackFor` 的同一套规则：引导给引导文案（缺则回退 `fail-retry`）；只有 `save.download` / `copy.link` 宣称结果（走系统面板的不宣称，R7）；取消静默、被阻断 / 失败给一步重试。
 
-## [Unreleased]
+### Notes
+
+- **SH-3 现状核实（未改码）**：`share-kit/poster` + `share-kit/render-dom` 出口**完整可用**（`exports` / `typesVersions` / README 均齐，`test/poster` + `test/render-dom` 全绿），审计「已抽出无人用」属实但**不是能力缺口**——全仓无消费方 import 这两个出口；5 站海报为站内自绘（照片拼贴 / 自定义版式），超出 `render-dom`（文字 + facts + QR）的设计覆盖。是否改用 `render-dom` 属站点侧取舍，本阶段只登记、不新增投机能力。
 
 ## [0.6.0] - 2026-10-11
 

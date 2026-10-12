@@ -7,3 +7,5 @@
 export * from './collect-signals'
 export * from './execute'
 export * from './report'
+export * from './default-deps'
+export * from './feedback'

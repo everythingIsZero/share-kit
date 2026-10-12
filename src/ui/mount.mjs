@@ -17,7 +17,7 @@
 
 import { listActions, normalizeFingerprint, renderCopy, resolveHintCopyId } from '../core/index.mjs'
 import { actionUsesShareUrl, isCardShareUrl, isPublicShareUrl } from '../core/share-url.mjs'
-import { collectSignals, executeAction } from '../web/index.mjs'
+import { collectSignals, defaultCopy, executeAction, systemShare, triggerDownload } from '../web/index.mjs'
 import { buttonLabelOf, sheetItemsOf, sheetTitleOf } from './view.mjs'
 import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from './sheet.mjs'
 
@@ -28,40 +28,10 @@ import { ensureStyles, showActionSheet, showPreviewOverlay, showTipBar } from '.
  */
 export { SENSITIVE_QUERY_KEYS, DEFAULT_PUBLIC_HOSTS, isPublicShareUrl, isCardShareUrl, actionUsesShareUrl } from '../core/share-url.mjs'
 
-/** 直接下载（save.download）：a[download] 点击（落点是本机下载目录 / 「文件」，非相册） */
-function defaultDownload({ url, filename }) {
-  const a = document.createElement('a')
-  a.href = url
-  if (filename) a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-}
-
-/** 复制链接：clipboard API 优先，静默失败（微信内常见）落 execCommand 兜底 */
-async function defaultCopy(text) {
-  // 空值稳健：没有可复制的公开链时静默返回——绝不把 undefined 强转成字面量 "undefined" 复制出去
-  if (typeof text !== 'string' || text.length === 0) return
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    try {
-      await navigator.clipboard.writeText(text)
-      return
-    } catch {
-      /* 落 execCommand */
-    }
-  }
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.setAttribute('readonly', '')
-  ta.style.cssText = 'position:fixed;top:-9999px;opacity:0;'
-  document.body.appendChild(ta)
-  ta.select()
-  try {
-    document.execCommand('copy')
-  } finally {
-    ta.remove()
-  }
-}
+/**
+ * 浏览器默认 deps（系统分享 / a[download] 下载 / 剪贴板复制）单源在 `web/default-deps.mjs`（SH-1），
+ * 本文件直接取用：`deps.share = systemShare`、`deps.download = triggerDownload`、`deps.copy = defaultCopy`。
+ */
 
 /** 长按引导层的图源：artifact.imageUrl 优先，否则用首个 File 现造 blob URL */
 function fileImageUrl(artifact) {
@@ -105,8 +75,8 @@ export function mountShare(target, options = {}) {
   const kind = artifact.kind
 
   const deps = {
-    share: (payload) => navigator.share(payload),
-    download: defaultDownload,
+    share: systemShare,
+    download: triggerDownload,
     copy: defaultCopy,
     // S3：站点追加公开域 / 敏感键随 deps 交给 executeAction 的闸门（自组 UI / ShareTrigger 也会用到）
     publicHosts,
